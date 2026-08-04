@@ -42,3 +42,18 @@ export async function changePassword({ old_password, new_password, confirm_passw
   });
   return data;
 }
+
+export async function forgotPassword(email) {
+  const { data } = await apiClient.post("/auth/forgot-password/", { email });
+  return data;
+}
+
+export async function resetPassword({ email, otp, new_password, confirm_password }) {
+  const { data } = await apiClient.post("/auth/reset-password/", {
+    email,
+    otp,
+    new_password,
+    confirm_password,
+  });
+  return data;
+}

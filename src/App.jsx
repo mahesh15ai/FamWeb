@@ -6,12 +6,16 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import CreateFamily from "./pages/CreateFamily";
 import FamilySettings from "./pages/FamilySettings";
 import FamilyMembers from "./pages/FamilyMembers";
 import JoinRequests from "./pages/JoinRequests";
 import JoinFamily from "./pages/JoinFamily";
+import EditProfile from "./pages/EditProfile";
+import FamilyTree from "./pages/FamilyTree";
 
 export default function App() {
   return (
@@ -22,6 +26,8 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route
             path="/dashboard"
@@ -68,6 +74,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <JoinRequests />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile/edit"
+            element={
+              <ProtectedRoute>
+                <EditProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/families/tree"
+            element={
+              <ProtectedRoute>
+                <FamilyTree />
               </ProtectedRoute>
             }
           />

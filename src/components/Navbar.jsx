@@ -9,6 +9,8 @@ import {
   SlidersHorizontal,
   Inbox,
   UserCheck,
+  UserCog,
+  GitBranch,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -77,6 +79,7 @@ export default function Navbar() {
   const navLinks = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/families/members", label: "Directory", icon: Users },
+    { to: "/families/tree", label: "Family Tree", icon: GitBranch },
     ...(canManageRequests
       ? [
           {
@@ -94,7 +97,7 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white/90 backdrop-blur-md transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        
+
         {/* Left Side: Brand Logo & Desktop Nav Links */}
         <div className="flex items-center gap-8">
           <button
@@ -149,7 +152,7 @@ export default function Navbar() {
 
         {/* Right Side: User Profile & Mobile Menu Toggle */}
         <div className="flex items-center gap-2">
-          
+
           {/* User Profile Dropdown (Desktop & Tablet) */}
           <div className="relative">
             <button
@@ -190,12 +193,34 @@ export default function Navbar() {
                     <button
                       onClick={() => {
                         setMenuOpen(false);
+                        navigate("/profile/edit");
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
+                    >
+                      <UserCog size={16} className="text-stone-400" />
+                      Edit Profile
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
                         navigate("/families/members");
                       }}
                       className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
                     >
                       <UserCheck size={16} className="text-stone-400" />
                       Family Directory
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/families/tree");
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
+                    >
+                      <GitBranch size={16} className="text-stone-400" />
+                      Family Tree
                     </button>
 
                     <button
@@ -269,6 +294,15 @@ export default function Navbar() {
           </div>
 
           <div className="border-t border-stone-100 pt-3">
+            <button
+              onClick={() => navigate("/profile/edit")}
+              type="button"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-stone-600 hover:bg-stone-50 rounded-xl"
+            >
+              <UserCog className="w-5 h-5 text-stone-400" />
+              <span>Edit Profile</span>
+            </button>
+
             <button
               onClick={() => navigate("/families/settings")}
               type="button"

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { User, Mail, Phone, Lock, UserPlus, Users } from "lucide-react";
+import { User, Mail, Phone, Lock, UserPlus, Users, Eye, EyeOff } from "lucide-react";
 import * as authApi from "../api/auth";
 import { useToast } from "../context/ToastContext";
 
 const fieldClass =
   "w-full rounded-lg border border-stone-300 pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500";
+const passwordFieldClass =
+  "w-full rounded-lg border border-stone-300 pl-9 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500";
 const iconClass = "absolute left-3 top-1/2 -translate-y-1/2 text-stone-400";
 
 export default function Register() {
@@ -19,6 +21,8 @@ export default function Register() {
     password: "",
     confirm_password: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -100,13 +104,21 @@ export default function Register() {
             <div className="relative">
               <Lock size={16} className={iconClass} />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 name="password"
                 value={form.password}
                 onChange={handleChange}
                 required
-                className={fieldClass}
+                className={passwordFieldClass}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
             {errors.password && <span className="text-xs text-red-600">{errors.password[0]}</span>}
           </label>
@@ -116,13 +128,21 @@ export default function Register() {
             <div className="relative">
               <Lock size={16} className={iconClass} />
               <input
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 name="confirm_password"
                 value={form.confirm_password}
                 onChange={handleChange}
                 required
-                className={fieldClass}
+                className={passwordFieldClass}
               />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
+                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+              >
+                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
             {errors.confirm_password && <span className="text-xs text-red-600">{errors.confirm_password[0]}</span>}
           </label>
