@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -32,10 +32,7 @@ const RELATIONSHIP_LABELS = {
 
 /**
  * Groups nodes into generations using PARENT edges. Nodes with no
- * incoming CHILD edge (i.e. nobody is their parent) start at
- * generation 0; everyone else is one generation below their parent.
- * This is a best-effort layout, not a strict genealogical algorithm —
- * cycles or missing links just fall back to generation 0.
+ * incoming CHILD edge start at generation 0; everyone else is one generation below.
  */
 function computeGenerations(nodes, edges) {
   const parentOf = {}; // childId -> [parentId, ...]
@@ -80,32 +77,45 @@ export default function FamilyTree() {
   const [deletingId, setDeletingId] = useState(null);
 
   const [showAddForm, setShowAddForm] = useState(false);
-  const [form, setForm] = useState({ from_member: "", to_member: "", relationship_type: "PARENT" });
+  const [form, setForm] = useState({
+    from_member: "",
+    to_member: "",
+    relationship_type: "PARENT",
+  });
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function loadAll() {
+      setLoading(true);
+      try {
+        const [graphData, relData, membersData] = await Promise.all([
+          familyTreeApi.getFamilyTreeGraph(),
+          familyTreeApi.listRelationships(),
+          membershipApi.listMembers(),
+        ]);
+
+        if (!isMounted) return;
+
+        setGraph(graphData);
+        setRelationships(Array.isArray(relData) ? relData : relData?.results ?? []);
+        setMembers(Array.isArray(membersData) ? membersData : membersData?.results ?? []);
+      } catch {
+        if (isMounted) toast.error("Couldn't load the family tree.");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
     loadAll();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function loadAll() {
-    setLoading(true);
-    try {
-      const [graphData, relData, membersData] = await Promise.all([
-        familyTreeApi.getFamilyTreeGraph(),
-        familyTreeApi.listRelationships(),
-        membershipApi.listMembers(),
-      ]);
-      setGraph(graphData);
-      setRelationships(Array.isArray(relData) ? relData : relData?.results ?? []);
-      setMembers(Array.isArray(membersData) ? membersData : membersData?.results ?? []);
-    } catch {
-      toast.error("Couldn't load the family tree.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const generationMap = useMemo(
     () => computeGenerations(graph.nodes, graph.edges),
@@ -125,7 +135,6 @@ export default function FamilyTree() {
       .map((gen) => ({ gen, members: rows[gen] }));
   }, [graph.nodes, generationMap]);
 
-  // Spouse pairs, so we can render them side-by-side with a heart connector
   const spousePairs = useMemo(() => {
     const pairs = new Set();
     graph.edges
@@ -139,6 +148,19 @@ export default function FamilyTree() {
 
   function isSpouseOf(a, b) {
     return spousePairs.has([a, b].sort((x, y) => x - y).join("-"));
+  }
+
+  async function reloadTree() {
+    try {
+      const [graphData, relData] = await Promise.all([
+        familyTreeApi.getFamilyTreeGraph(),
+        familyTreeApi.listRelationships(),
+      ]);
+      setGraph(graphData);
+      setRelationships(Array.isArray(relData) ? relData : relData?.results ?? []);
+    } catch {
+      toast.error("Failed to refresh family tree data.");
+    }
   }
 
   async function handleAddRelationship(e) {
@@ -164,7 +186,7 @@ export default function FamilyTree() {
       toast.success("Relationship added.");
       setForm({ from_member: "", to_member: "", relationship_type: "PARENT" });
       setShowAddForm(false);
-      loadAll();
+      reloadTree();
     } catch (err) {
       const data = err.response?.data;
       const message = data?.detail || "Couldn't add that relationship.";
@@ -181,7 +203,7 @@ export default function FamilyTree() {
     try {
       await familyTreeApi.deleteRelationship(id);
       toast.success("Relationship removed.");
-      loadAll();
+      reloadTree();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Couldn't remove relationship.");
     } finally {
@@ -309,13 +331,15 @@ export default function FamilyTree() {
           <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 overflow-x-auto">
             <div className="flex flex-col gap-10 min-w-max">
               {generationRows.map(({ gen, members: rowMembers }) => {
-                // group consecutive spouse pairs together so they render side by side
                 const rendered = new Set();
                 const groups = [];
                 rowMembers.forEach((node) => {
                   if (rendered.has(node.id)) return;
                   const spouse = rowMembers.find(
-                    (other) => other.id !== node.id && !rendered.has(other.id) && isSpouseOf(node.id, other.id)
+                    (other) =>
+                      other.id !== node.id &&
+                      !rendered.has(other.id) &&
+                      isSpouseOf(node.id, other.id)
                   );
                   if (spouse) {
                     groups.push([node, spouse]);
@@ -338,10 +362,15 @@ export default function FamilyTree() {
                           {group.map((node, i) => {
                             const photoUrl = resolveMediaUrl(node.profile_photo);
                             return (
-                              <>
-                                {i > 0 && <Heart size={14} className="text-rose-400 shrink-0" fill="currentColor" />}
+                              <React.Fragment key={node.id}>
+                                {i > 0 && (
+                                  <Heart
+                                    size={14}
+                                    className="text-rose-400 shrink-0"
+                                    fill="currentColor"
+                                  />
+                                )}
                                 <div
-                                  key={node.id}
                                   className="flex flex-col items-center w-24 text-center"
                                   title={node.name}
                                 >
@@ -363,7 +392,7 @@ export default function FamilyTree() {
                                     {node.role.toLowerCase()}
                                   </p>
                                 </div>
-                              </>
+                              </React.Fragment>
                             );
                           })}
                         </div>

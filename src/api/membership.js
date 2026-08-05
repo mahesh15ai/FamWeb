@@ -24,3 +24,8 @@ export async function listRoles() {
   const { data } = await apiClient.get("/members/roles/");
   return data;
 }
+
+export async function searchMembers(query) {
+  const { data } = await apiClient.get("/members/search/", { params: { q: query } });
+  return data;
+}

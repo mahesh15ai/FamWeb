@@ -1,19 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Users,
   Shield,
   UserX,
-  Sparkles,
   Loader2,
   Crown,
   Mail,
+  Search,
+  X,
 } from "lucide-react";
 import * as membershipApi from "../api/membership";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import Navbar from "../components/Navbar";
+import { resolveMediaUrl } from "../utils/media";
 
 export default function FamilyMembers() {
   const navigate = useNavigate();
@@ -23,27 +25,35 @@ export default function FamilyMembers() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function fetchMembers() {
+      setLoading(true);
+      try {
+        const data = await membershipApi.listMembers();
+        if (!isMounted) return;
+        const list = Array.isArray(data) ? data : data?.results ?? [];
+        setMembers(list);
+      } catch {
+        if (isMounted) {
+          toast.error("Failed to load family members.");
+          setMembers([]);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
     fetchMembers();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function fetchMembers() {
-    setLoading(true);
-    try {
-      const data = await membershipApi.listMembers();
-      // Backend paginates: { count, results: [...] }. Unwrap it if present,
-      // otherwise fall back to treating the response itself as the array.
-      const list = Array.isArray(data) ? data : data?.results ?? [];
-      setMembers(list);
-    } catch {
-      toast.error("Failed to load family members.");
-      setMembers([]);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleRemoveMember(memberId, memberName) {
     if (!window.confirm(`Are you sure you want to remove ${memberName} from the family?`)) {
@@ -64,26 +74,46 @@ export default function FamilyMembers() {
     }
   }
 
-  /**
-   * The membership serializer returns flat fields — user_email, user_full_name —
-   * not a nested user object. `member.user` is just the plain user ID.
-   */
   function getMemberInfo(member) {
     const name =
       member.user_full_name?.trim() || member.user_email?.split("@")[0] || "Family Member";
     const email = member.user_email || "No email available";
-    const role = member.role || "Member";
+    const role = member.role || "MEMBER";
     const initial = name[0]?.toUpperCase() || "?";
+    const photoUrl = resolveMediaUrl(member.user_profile_photo);
 
-    return { name, email, role, initial, userId: member.user };
+    return { name, email, role, initial, photoUrl, userId: member.user };
   }
+
+  // Find current user's membership to evaluate permissions
+  const myMembership = useMemo(() => {
+    return members.find((m) => m.user === currentUser?.id || m.user_email === currentUser?.email);
+  }, [members, currentUser]);
+
+  const canManageMembers =
+    myMembership?.role?.toUpperCase() === "OWNER" ||
+    myMembership?.role?.toUpperCase() === "SUPER_ADMIN" ||
+    currentUser?.role === "admin";
+
+  const filteredMembers = useMemo(() => {
+    if (!searchQuery.trim()) return members;
+    const q = searchQuery.toLowerCase().trim();
+
+    return members.filter((member) => {
+      const { name, email, role } = getMemberInfo(member);
+      return (
+        name.toLowerCase().includes(q) ||
+        email.toLowerCase().includes(q) ||
+        role.toLowerCase().includes(q)
+      );
+    });
+  }, [members, searchQuery]);
 
   return (
     <div className="min-h-screen bg-stone-100/70 text-stone-900 antialiased selection:bg-brand-100 selection:text-brand-900 pb-12">
       <Navbar />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-        {/* Back Navigation */}
         <div>
           <button
             onClick={() => navigate("/dashboard")}
@@ -95,23 +125,41 @@ export default function FamilyMembers() {
           </button>
         </div>
 
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200/80 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200/80 pb-5">
           <div className="space-y-1">
-            
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-stone-900 flex items-center gap-2">
               Family Members
               <span className="text-xs sm:text-sm font-bold px-2.5 py-0.5 rounded-full bg-brand-100 text-brand-700">
-                {members.length}
+                {filteredMembers.length}
               </span>
             </h1>
+            <p className="text-stone-500 text-xs sm:text-sm max-w-xs">
+              View active member accounts, roles, and connected profiles.
+            </p>
           </div>
-          <p className="text-stone-500 text-xs sm:text-sm max-w-xs">
-            View active member accounts, roles, and connected profiles.
-          </p>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name, email, or role..."
+              className="w-full rounded-xl border border-stone-300 bg-white pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 placeholder:text-stone-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Loading Skeleton */}
         {loading && (
           <div className="space-y-3 animate-pulse">
             {[1, 2, 3, 4].map((i) => (
@@ -132,7 +180,6 @@ export default function FamilyMembers() {
           </div>
         )}
 
-        {/* Empty State */}
         {!loading && members.length === 0 && (
           <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm text-center px-6 py-16 max-w-lg mx-auto space-y-4">
             <div className="w-14 h-14 bg-stone-100 text-stone-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
@@ -143,18 +190,39 @@ export default function FamilyMembers() {
                 No Members Found
               </h2>
               <p className="text-xs sm:text-sm text-stone-500 max-w-xs mx-auto">
-                No members were returned from your family workspace. Try refreshing or inviting members.
+                No members were returned from your family workspace.
               </p>
             </div>
           </div>
         )}
 
-        {/* Active Members List */}
-        {!loading && members.length > 0 && (
+        {!loading && members.length > 0 && filteredMembers.length === 0 && (
+          <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm text-center px-6 py-12 max-w-lg mx-auto space-y-3">
+            <div className="w-12 h-12 bg-stone-100 text-stone-400 rounded-2xl flex items-center justify-center mx-auto">
+              <Search className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-bold text-stone-900">
+              No matching members
+            </h2>
+            <p className="text-xs sm:text-sm text-stone-500">
+              No family members match "<span className="font-semibold">{searchQuery}</span>".
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="text-xs sm:text-sm font-semibold text-brand-600 hover:underline pt-1 inline-block"
+            >
+              Clear Search
+            </button>
+          </div>
+        )}
+
+        {!loading && filteredMembers.length > 0 && (
           <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm overflow-hidden divide-y divide-stone-100">
-            {members.map((member) => {
-              const { name, email, role, initial, userId } = getMemberInfo(member);
-              const isOwner = role.toUpperCase() === "OWNER" || role.toUpperCase() === "ADMIN";
+            {filteredMembers.map((member) => {
+              const { name, email, role, initial, photoUrl, userId } = getMemberInfo(member);
+              const isOwnerOrAdmin =
+                role.toUpperCase() === "OWNER" || role.toUpperCase() === "SUPER_ADMIN";
               const isSelf = currentUser?.id === userId || currentUser?.email === email;
 
               return (
@@ -162,11 +230,18 @@ export default function FamilyMembers() {
                   key={member.id || userId || email}
                   className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-stone-50/50 transition-colors"
                 >
-                  {/* Member Meta */}
                   <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-11 h-11 rounded-2xl bg-brand-100 text-brand-700 font-extrabold flex items-center justify-center text-base shrink-0 border border-brand-200/50">
-                      {initial}
-                    </div>
+                    {photoUrl ? (
+                      <img
+                        src={photoUrl}
+                        alt={name}
+                        className="w-11 h-11 rounded-2xl object-cover shrink-0 border border-stone-200 shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-2xl bg-brand-100 text-brand-700 font-extrabold flex items-center justify-center text-base shrink-0 border border-brand-200/50">
+                        {initial}
+                      </div>
+                    )}
 
                     <div className="space-y-0.5 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -187,25 +262,24 @@ export default function FamilyMembers() {
                     </div>
                   </div>
 
-                  {/* Role Badge & Actions */}
                   <div className="flex items-center gap-3 shrink-0">
                     <span
                       className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${
-                        isOwner
+                        isOwnerOrAdmin
                           ? "bg-amber-50 text-amber-700 border border-amber-200/80"
                           : "bg-stone-100 text-stone-700 border border-stone-200/80"
                       }`}
                     >
-                      {isOwner ? (
+                      {isOwnerOrAdmin ? (
                         <Crown className="w-3.5 h-3.5 text-amber-600" />
                       ) : (
                         <Shield className="w-3.5 h-3.5 text-stone-400" />
                       )}
-                      <span className="capitalize">{role.toLowerCase()}</span>
+                      <span className="capitalize">{role.replace("_", " ").toLowerCase()}</span>
                     </span>
 
-                    {/* Optional Remove Button for non-owners */}
-                    {!isSelf && !isOwner && membershipApi.removeMember && (
+                    {/* Only show remove button if user has permission and is not targeting themselves or an Owner */}
+                    {canManageMembers && !isSelf && role.toUpperCase() !== "OWNER" && (
                       <button
                         onClick={() => handleRemoveMember(member.id, name)}
                         disabled={removingId === member.id}

@@ -38,9 +38,12 @@ export default function FamilySettings() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     familiesApi
       .getMyFamily()
       .then((data) => {
+        if (!isMounted) return;
         setFamily(data);
         setForm({ name: data.name ?? "", description: data.description ?? "" });
         setLogoPreview(resolveMediaUrl(data.logo));
@@ -48,11 +51,18 @@ export default function FamilySettings() {
         setCoverPositionY(data.cover_position_y ?? 50);
       })
       .catch(() => {
-        toast.error("Couldn't load your family details.");
-        navigate("/dashboard");
+        if (isMounted) {
+          toast.error("Couldn't load your family details.");
+          navigate("/dashboard");
+        }
       })
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   function handleChange(e) {
@@ -78,7 +88,7 @@ export default function FamilySettings() {
     } else {
       setCoverFile(file);
       setCoverPreview(previewUrl);
-      setCoverPositionY(50); // reset to centered for a newly-picked image
+      setCoverPositionY(50);
     }
   }
 
@@ -168,7 +178,6 @@ export default function FamilySettings() {
       <Navbar />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-
         <div>
           <button
             onClick={() => navigate("/dashboard")}
@@ -191,7 +200,7 @@ export default function FamilySettings() {
             </h1>
           </div>
           <p className="text-stone-500 text-xs sm:text-sm max-w-xs">
-            Manage your family&apos;s public branding, details, and access security.
+            Manage your family's public branding, details, and access security.
           </p>
         </div>
 
@@ -199,7 +208,6 @@ export default function FamilySettings() {
           onSubmit={handleSubmit}
           className="bg-white rounded-3xl border border-stone-200/80 shadow-sm p-5 sm:p-8 space-y-6"
         >
-          {/* Cover Banner Upload — now drag-to-reposition */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-xs sm:text-sm font-bold text-stone-700 uppercase tracking-wider">
@@ -221,7 +229,6 @@ export default function FamilySettings() {
                     onPositionChange={setCoverPositionY}
                   />
 
-                  {/* Change / Remove controls — separate from the drag surface */}
                   <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <label className="cursor-pointer bg-white/90 hover:bg-white text-stone-800 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-md transition-transform active:scale-95">
                       Change
@@ -260,7 +267,6 @@ export default function FamilySettings() {
             </div>
           </div>
 
-          {/* Logo & Name Section */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-start pt-2">
             <div className="sm:col-span-4 space-y-2 flex flex-col items-center sm:items-start">
               <label className="block text-xs sm:text-sm font-bold text-stone-700 uppercase tracking-wider">
