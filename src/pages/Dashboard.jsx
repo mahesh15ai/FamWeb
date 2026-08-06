@@ -19,6 +19,8 @@ import {
   Sparkles,
   ChevronRight,
   Zap,
+  GitFork,
+  MessageSquare,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -193,19 +195,35 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
         {/* Executive Header Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200/80 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200/80 pb-5">
           <div className="space-y-1">
-           
+            <div className="flex items-center gap-1.5 text-brand-600 font-bold text-xs uppercase tracking-widest">
+              <Zap className="w-3.5 h-3.5 fill-brand-600 animate-pulse" />
+              Workspace Intelligence
+            </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-stone-900 flex items-center gap-2">
               Welcome back, {user?.first_name || "Member"}
               <span className="text-xl inline-block hover:scale-125 transition-transform duration-200 cursor-pointer">👋🏻</span>
             </h1>
           </div>
-          <p className="text-stone-500 text-xs sm:text-sm max-w-sm">
-            {family
-              ? "Access your family network, members, and workspace settings."
-              : "Set up or join a family space to begin collaborating."}
-          </p>
+
+          {/* Quick Action Navigation Bar */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/posts")}
+              className="inline-flex items-center gap-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-semibold px-3 py-2 rounded-xl transition-colors active:scale-95"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Family Feed</span>
+            </button>
+            <button
+              onClick={() => navigate("/families/tree")}
+              className="inline-flex items-center gap-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold px-3 py-2 rounded-xl transition-colors active:scale-95"
+            >
+              <GitFork className="w-3.5 h-3.5" />
+              <span>Family Tree</span>
+            </button>
+          </div>
         </div>
 
         {/* Celebration Banner */}
@@ -238,7 +256,7 @@ export default function Dashboard() {
               <button
                 onClick={() => navigate("/posts")}
                 type="button"
-                className="group shrink-0 inline-flex items-center gap-2 bg-white hover:bg-stone-50 text-stone-900 font-bold px-5 py-2.5 rounded-xl shadow-md transition-all duration-200 active:scale-95 text-xs tracking-wide"
+                className="group shrink-0 inline-flex items-center gap-2 bg-white hover:bg-stone-50 text-stone-900 font-bold px-5 py-2.5 rounded-xl shadow-md transition-all duration-200 active:scale-95 text-xs tracking-wide cursor-pointer"
               >
                 <span>Send Birthday Wishes</span>
                 <ChevronRight className="w-4 h-4 text-stone-400 group-hover:translate-x-1 transition-transform" />
@@ -258,17 +276,17 @@ export default function Dashboard() {
           <div className="space-y-8">
             {/* Main Family Banner Card */}
             <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-              <div className="relative w-full h-48 sm:h-64 md:h-80 bg-stone-900 overflow-hidden group">
+              <div className="relative w-full h-48 sm:h-64 md:h-72 bg-stone-900 overflow-hidden group">
                 {coverUrl ? (
                   <img
                     src={coverUrl}
                     alt={`${family.name} cover`}
-                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 block"
                   />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-r from-brand-600 via-brand-700 to-stone-800" />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
               </div>
 
               <div className="px-5 sm:px-8 pb-6 sm:pb-8">
@@ -320,7 +338,7 @@ export default function Dashboard() {
                     <button
                       onClick={copyInviteCode}
                       type="button"
-                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all duration-150 active:scale-95 text-xs"
+                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all duration-150 active:scale-95 text-xs cursor-pointer"
                     >
                       {copied ? (
                         <>
@@ -341,7 +359,7 @@ export default function Dashboard() {
                       <button
                         onClick={() => navigate("/families/join-requests")}
                         type="button"
-                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all duration-150 active:scale-95 text-xs"
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all duration-150 active:scale-95 text-xs cursor-pointer"
                       >
                         <Inbox className="w-4 h-4 text-stone-500" />
                         <span>Join Requests</span>
@@ -350,9 +368,12 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Dashboard Metrics Grid */}
+                {/* Dashboard Interactive Metrics Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-8 pt-6 border-t border-stone-100">
-                  <div className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-brand-400 hover:bg-white hover:shadow-md transition-all duration-200 group">
+                  <div
+                    onClick={() => navigate("/families/members")}
+                    className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-brand-400 hover:bg-white hover:shadow-md transition-all duration-200 group cursor-pointer"
+                  >
                     <div className="p-2.5 rounded-xl bg-brand-50 text-brand-600 shrink-0 group-hover:scale-110 transition-transform">
                       <Users className="w-5 h-5" />
                     </div>
@@ -364,7 +385,10 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-emerald-400 hover:bg-white hover:shadow-md transition-all duration-200 group">
+                  <div
+                    onClick={() => navigate("/posts")}
+                    className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-emerald-400 hover:bg-white hover:shadow-md transition-all duration-200 group cursor-pointer"
+                  >
                     <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform">
                       <FileText className="w-5 h-5" />
                     </div>
@@ -408,13 +432,94 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Quick Navigation Cards */}
+            {/* Quick Navigation Hub with Direct Links */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {/* Link to Family Feed */}
+              <button
+                onClick={() => navigate("/posts")}
+                type="button"
+                className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
+              >
+                <div>
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
+                    Family Posts
+                    <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                  </h3>
+                  <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
+                    Share messages, announcements, and wishes in the family feed.
+                  </p>
+                </div>
+              </button>
+
+              {/* Link to My Posts */}
+              <button
+                onClick={() => navigate("/posts/my-posts")}
+                type="button"
+                className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
+              >
+                <div>
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
+                    <MessageSquare className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
+                    My Published Posts
+                    <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                  </h3>
+                  <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
+                    Manage and edit posts published by your user account.
+                  </p>
+                </div>
+              </button>
+
+              {/* Link to Family Tree */}
+              <button
+                onClick={() => navigate("/families/tree")}
+                type="button"
+                className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
+              >
+                <div>
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
+                    <GitFork className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
+                    Family Tree
+                    <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                  </h3>
+                  <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
+                    View family member connections and visual lineage graph.
+                  </p>
+                </div>
+              </button>
+
+              {/* Link to Member Directory */}
+              <button
+                onClick={() => navigate("/families/members")}
+                type="button"
+                className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
+              >
+                <div>
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
+                    Family Directory
+                    <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                  </h3>
+                  <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
+                    View active member roles, profiles, and permissions.
+                  </p>
+                </div>
+              </button>
+
+              {/* Link to Join Requests (Owner/Admin only) */}
               {isOwnerOrAdmin && (
                 <button
                   onClick={() => navigate("/families/join-requests")}
                   type="button"
-                  className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1"
+                  className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
                 >
                   <div>
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
@@ -431,30 +536,12 @@ export default function Dashboard() {
                 </button>
               )}
 
-              <button
-                onClick={() => navigate("/families/members")}
-                type="button"
-                className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1"
-              >
-                <div>
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
-                    <Users className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
-                    Family Directory
-                    <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                  </h3>
-                  <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
-                    View active member roles, profiles, and permissions.
-                  </p>
-                </div>
-              </button>
-
+              {/* Link to Workspace Settings (Owner/Admin only) */}
               {isOwnerOrAdmin && (
                 <button
                   onClick={() => navigate("/families/settings")}
                   type="button"
-                  className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1"
+                  className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
                 >
                   <div>
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
@@ -472,9 +559,7 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Bottom Feeds Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Activity Feed */}
               <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm p-6 space-y-4 hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2">
@@ -511,9 +596,7 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* Schedules and Birthdays Side-by-Side */}
               <div className="space-y-6">
-                {/* Upcoming Events */}
                 <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm p-6 space-y-4 hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-amber-600" />
@@ -546,7 +629,6 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                {/* Birthdays */}
                 <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm p-6 space-y-4 hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2">
                     <Cake className="w-5 h-5 text-rose-500 animate-bounce" />
@@ -586,7 +668,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Empty State */}
         {!loading && !family && (
           <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm text-center px-6 py-16 sm:py-20 max-w-2xl mx-auto my-8">
             <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner animate-pulse">
@@ -605,7 +686,7 @@ export default function Dashboard() {
               <button
                 onClick={() => navigate("/families/create")}
                 type="button"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-xl shadow-sm transition-all duration-150 active:scale-95 text-xs"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-xl shadow-sm transition-all duration-150 active:scale-95 text-xs cursor-pointer"
               >
                 <Plus size={16} />
                 <span>Create Workspace</span>
@@ -614,7 +695,7 @@ export default function Dashboard() {
               <button
                 onClick={() => navigate("/families/join")}
                 type="button"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 font-semibold px-6 py-3 rounded-xl shadow-sm transition-all duration-150 active:scale-95 text-xs"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 font-semibold px-6 py-3 rounded-xl shadow-sm transition-all duration-150 active:scale-95 text-xs cursor-pointer"
               >
                 <UserPlus size={16} className="text-stone-500" />
                 <span>Join with Code</span>

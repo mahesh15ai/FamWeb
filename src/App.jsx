@@ -16,6 +16,8 @@ import JoinRequests from "./pages/JoinRequests";
 import JoinFamily from "./pages/JoinFamily";
 import EditProfile from "./pages/EditProfile";
 import FamilyTree from "./pages/FamilyTree";
+import Posts from "./pages/Posts";
+import MyPosts from "./pages/MyPosts";
 
 export default function App() {
   return (
@@ -90,6 +92,23 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <FamilyTree />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/posts"
+            element={
+              <ProtectedRoute>
+                <Posts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/posts/my-posts"
+            element={
+              <ProtectedRoute>
+                <MyPosts />
               </ProtectedRoute>
             }
           />
