@@ -1,98 +1,152 @@
-import { useEffect, useState } from "react";
-import { FileText } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
-import * as postsApi from "../api/posts";
-import Navbar from "../components/Navbar";
-import PostCard from "../components/PostCard";
+import { useState } from "react";
+import { Clock, Edit2, Trash2, MessageSquare } from "lucide-react";
+import { resolveMediaUrl } from "../utils/media";
+import CommentsSection from "../components/CommentsSection"; // Import the CommentsSection component
 
-export default function MyPosts() {
-  const { user } = useAuth();
-  const toast = useToast();
+export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [content, setContent] = useState(post.content || "");
+  const [submitting, setSubmitting] = useState(false);
 
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Comments state
+  const [showComments, setShowComments] = useState(false);
+  const [commentCount, setCommentCount] = useState(
+    post.comments_count ?? post.comments ?? 0
+  );
 
-  useEffect(() => {
-    loadMyPosts();
-  }, []);
+  const isAuthor = currentUserId === post.author;
+  const avatarUrl = resolveMediaUrl(post.author_profile_photo);
+  const imageUrl = resolveMediaUrl(post.image);
+  const videoUrl = resolveMediaUrl(post.video);
 
-  async function loadMyPosts() {
+  async function handleSave() {
     try {
-      setLoading(true);
-      const data = await postsApi.getMyPosts();
-      setPosts(Array.isArray(data) ? data : data.results ?? []);
-    } catch {
-      toast.error("Failed to load your posts.");
+      setSubmitting(true);
+      await onUpdate(post.id, content.trim());
+      setIsEditing(false);
     } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleUpdatePost(id, updatedContent) {
-    try {
-      const updated = await postsApi.updatePost(id, { content: updatedContent });
-      setPosts((prev) => prev.map((p) => (p.id === id ? updated : p)));
-      toast.success("Post updated!");
-    } catch {
-      toast.error("Could not update post.");
-    }
-  }
-
-  async function handleDeletePost(id) {
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
-    try {
-      await postsApi.deletePost(id);
-      setPosts((prev) => prev.filter((p) => p.id !== id));
-      toast.success("Post deleted.");
-    } catch {
-      toast.error("Could not delete post.");
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-stone-100/70 text-stone-900 antialiased selection:bg-brand-100 selection:text-brand-900 pb-16">
-      <Navbar />
+    <div className="bg-white rounded-3xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md transition-shadow space-y-4">
+      {/* Author Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={post.author_name}
+              className="w-10 h-10 rounded-2xl object-cover ring-2 ring-stone-100"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-2xl bg-brand-50 text-brand-600 font-extrabold text-sm flex items-center justify-center">
+              {post.author_name?.[0]?.toUpperCase() || "M"}
+            </div>
+          )}
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        <div className="border-b border-stone-200/80 pb-5">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-stone-900 flex items-center gap-2">
-            My Posts
-            <FileText className="w-5 h-5 text-brand-600" />
-          </h1>
-          <p className="text-stone-500 text-xs sm:text-sm mt-1">
-            Manage all posts published by your account across family workspaces.
-          </p>
-        </div>
-
-        {loading ? (
-          <div className="space-y-4 animate-pulse">
-            {[1, 2].map((i) => (
-              <div key={i} className="bg-white h-32 rounded-3xl border border-stone-200" />
-            ))}
-          </div>
-        ) : posts.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-stone-200/80 p-12 text-center space-y-3">
-            <FileText className="w-10 h-10 text-stone-300 mx-auto" />
-            <h3 className="text-lg font-bold text-stone-900">No Posts Created Yet</h3>
-            <p className="text-xs text-stone-500 max-w-sm mx-auto">
-              You haven't created any posts yet.
+          <div>
+            <h4 className="text-sm font-bold text-stone-900">
+              {post.author_name || "Family Member"}
+            </h4>
+            <p className="text-[11px] text-stone-400 flex items-center gap-1 font-medium">
+              <Clock className="w-3 h-3" />
+              {new Date(post.created_at).toLocaleString()}
             </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                currentUserId={user?.id}
-                onUpdate={handleUpdatePost}
-                onDelete={handleDeletePost}
-              />
-            ))}
+        </div>
+
+        {isAuthor && !isEditing && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-50 rounded-xl transition-colors cursor-pointer"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => onDelete(post.id)}
+              className="p-2 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         )}
-      </main>
+      </div>
+
+      {/* Content / Edit Mode */}
+      {isEditing ? (
+        <div className="space-y-3 pt-2">
+          <textarea
+            rows={3}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full bg-stone-50 border border-stone-200 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white resize-none"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setIsEditing(false);
+                setContent(post.content || "");
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 hover:bg-stone-100 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={submitting}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 cursor-pointer"
+            >
+              {submitting ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {post.content && (
+            <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-line">
+              {post.content}
+            </p>
+          )}
+
+          {/* Image Attachment */}
+          {imageUrl && (
+            <div className="rounded-2xl overflow-hidden border border-stone-100 bg-stone-900 max-h-96 flex items-center justify-center">
+              <img src={imageUrl} alt="Post attachment" className="w-full h-full object-cover max-h-96" />
+            </div>
+          )}
+
+          {/* Video Attachment */}
+          {videoUrl && (
+            <div className="rounded-2xl overflow-hidden border border-stone-100 bg-black">
+              <video src={videoUrl} controls className="w-full max-h-96 object-contain" />
+            </div>
+          )}
+
+          {/* Post Action Footer */}
+          <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
+            <button
+              onClick={() => setShowComments((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-stone-100 text-stone-600 text-xs font-medium transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4 text-brand-600" />
+              <span>
+                {commentCount} {commentCount === 1 ? "Comment" : "Comments"}
+              </span>
+            </button>
+          </div>
+
+          {/* Expandable Comments Section */}
+          {showComments && (
+            <CommentsSection
+              postId={post.id}
+              onCommentCountChange={(newCount) => setCommentCount(newCount)}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

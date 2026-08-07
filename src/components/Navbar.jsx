@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   LogOut,
   Users,
@@ -17,21 +17,15 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import * as joinRequestsApi from "../api/joinRequests";
 import * as familiesApi from "../api/families";
-
-const API_ORIGIN =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, "") ?? "";
-
-function resolveMediaUrl(path) {
-  if (!path) return null;
-  if (path.startsWith("http")) return path;
-  return `${API_ORIGIN}${path}`;
-}
+import { resolveMediaUrl } from "../utils/media";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const dropdownRef = useRef(null);
 
   const [pendingCount, setPendingCount] = useState(0);
   const [canManageRequests, setCanManageRequests] = useState(false);
@@ -41,8 +35,14 @@ export default function Navbar() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const initials =
-    `${user?.first_name?.[0] ?? ""}${user?.last_name?.[0] ?? ""}`.toUpperCase() ||
-    "?";
+    `${user?.first_name?.[0] ?? ""}${user?.last_name?.[0] ?? ""}`.toUpperCase() || "?";
+
+  const isOwnerOrAdmin =
+    family?.owner_id === user?.id ||
+    family?.created_by === user?.id ||
+    user?.role === "admin" ||
+    family?.user_role === "admin" ||
+    family?.user_role === "owner";
 
   useEffect(() => {
     familiesApi.getMyFamily().then(setFamily).catch(() => setFamily(null));
@@ -59,10 +59,20 @@ export default function Navbar() {
         setCanManageRequests(false);
       });
 
-    // Close mobile nav on route change
     setMobileNavOpen(false);
     setMenuOpen(false);
   }, [location.pathname]);
+
+  // Click Outside Listener for User Dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -97,13 +107,13 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white/90 backdrop-blur-md transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-
-        {/* Left Side: Brand Logo & Desktop Nav Links */}
+        
+        {/* Brand Logo & Desktop Nav Links */}
         <div className="flex items-center gap-8">
           <button
             type="button"
             onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl transition-transform active:scale-[0.98]"
+            className="flex items-center gap-2.5 focus:outline-none rounded-xl transition-transform active:scale-[0.98]"
           >
             {logoUrl ? (
               <img
@@ -121,7 +131,7 @@ export default function Navbar() {
             </span>
           </button>
 
-          {/* Desktop Navigation Links */}
+          {/* Desktop Links */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map(({ to, label, icon: Icon, badge }) => {
               const active = location.pathname === to;
@@ -150,11 +160,9 @@ export default function Navbar() {
           </nav>
         </div>
 
-        {/* Right Side: User Profile & Mobile Menu Toggle */}
+        {/* User Dropdown & Mobile Toggle */}
         <div className="flex items-center gap-2">
-
-          {/* User Profile Dropdown (Desktop & Tablet) */}
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setMenuOpen((open) => !open)}
               type="button"
@@ -174,55 +182,50 @@ export default function Navbar() {
               <ChevronDown size={14} className={`text-stone-400 transition-transform duration-200 hidden sm:block ${menuOpen ? "rotate-180" : ""}`} />
             </button>
 
-            {/* Dropdown Menu Overlay */}
             {menuOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setMenuOpen(false)}
-                />
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-stone-200/80 rounded-2xl shadow-lg py-1.5 z-20 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-4 py-2.5 border-b border-stone-100">
-                    <p className="text-sm font-bold text-stone-900 truncate">
-                      {user?.first_name} {user?.last_name}
-                    </p>
-                    <p className="text-xs text-stone-400 truncate">{user?.email}</p>
-                  </div>
+              <div className="absolute right-0 mt-2 w-56 bg-white border border-stone-200/80 rounded-2xl shadow-lg py-1.5 z-20">
+                <div className="px-4 py-2.5 border-b border-stone-100">
+                  <p className="text-sm font-bold text-stone-900 truncate">
+                    {user?.first_name} {user?.last_name}
+                  </p>
+                  <p className="text-xs text-stone-400 truncate">{user?.email}</p>
+                </div>
 
-                  <div className="py-1">
-                    <button
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate("/profile/edit");
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
-                    >
-                      <UserCog size={16} className="text-stone-400" />
-                      Edit Profile
-                    </button>
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate("/profile/edit");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
+                  >
+                    <UserCog size={16} className="text-stone-400" />
+                    Edit Profile
+                  </button>
 
-                    <button
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate("/families/members");
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
-                    >
-                      <UserCheck size={16} className="text-stone-400" />
-                      Family Directory
-                    </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate("/families/members");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
+                  >
+                    <UserCheck size={16} className="text-stone-400" />
+                    Family Directory
+                  </button>
 
-                    <button
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate("/families/tree");
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
-                    >
-                      <GitBranch size={16} className="text-stone-400" />
-                      Family Tree
-                    </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate("/families/tree");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
+                  >
+                    <GitBranch size={16} className="text-stone-400" />
+                    Family Tree
+                  </button>
 
+                  {isOwnerOrAdmin && (
                     <button
                       onClick={() => {
                         setMenuOpen(false);
@@ -233,24 +236,23 @@ export default function Navbar() {
                       <SlidersHorizontal size={16} className="text-stone-400" />
                       Family Settings
                     </button>
-                  </div>
-
-                  <div className="border-t border-stone-100 pt-1">
-                    <button
-                      onClick={handleLogout}
-                      disabled={loggingOut}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium disabled:opacity-60"
-                    >
-                      <LogOut size={16} />
-                      {loggingOut ? "Logging out…" : "Log out"}
-                    </button>
-                  </div>
+                  )}
                 </div>
-              </>
+
+                <div className="border-t border-stone-100 pt-1">
+                  <button
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium disabled:opacity-60"
+                  >
+                    <LogOut size={16} />
+                    {loggingOut ? "Logging out…" : "Log out"}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Mobile Menu Toggle Button */}
           <button
             onClick={() => setMobileNavOpen((open) => !open)}
             type="button"
@@ -262,9 +264,9 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Navigation Drawer */}
+      {/* Mobile Drawer */}
       {mobileNavOpen && (
-        <div className="md:hidden border-t border-stone-200/80 bg-white px-4 pt-3 pb-6 space-y-2 shadow-lg animate-in slide-in-from-top-2 duration-150">
+        <div className="md:hidden border-t border-stone-200/80 bg-white px-4 pt-3 pb-6 space-y-2 shadow-lg">
           <div className="space-y-1">
             {navLinks.map(({ to, label, icon: Icon, badge }) => {
               const active = location.pathname === to;
@@ -303,14 +305,16 @@ export default function Navbar() {
               <span>Edit Profile</span>
             </button>
 
-            <button
-              onClick={() => navigate("/families/settings")}
-              type="button"
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-stone-600 hover:bg-stone-50 rounded-xl"
-            >
-              <SlidersHorizontal className="w-5 h-5 text-stone-400" />
-              <span>Family Settings</span>
-            </button>
+            {isOwnerOrAdmin && (
+              <button
+                onClick={() => navigate("/families/settings")}
+                type="button"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-stone-600 hover:bg-stone-50 rounded-xl"
+              >
+                <SlidersHorizontal className="w-5 h-5 text-stone-400" />
+                <span>Family Settings</span>
+              </button>
+            )}
 
             <button
               onClick={handleLogout}

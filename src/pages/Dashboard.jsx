@@ -1,16 +1,14 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
   Copy,
   CopyCheck,
-  Users,
   UserPlus,
   SlidersHorizontal,
   ArrowUpRight,
   Activity,
   Building2,
-  Inbox,
   Calendar,
   Cake,
   FileText,
@@ -19,16 +17,34 @@ import {
   Sparkles,
   ChevronRight,
   Zap,
-  GitFork,
   MessageSquare,
+  X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import * as familiesApi from "../api/families";
-import * as membershipApi from "../api/membership";
 import * as dashboardApi from "../api/dashboard";
 import Navbar from "../components/Navbar";
 import { resolveMediaUrl } from "../utils/media";
+
+// Compact Relative Time Helper
+function formatShortTime(timestamp) {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - date) / 1000);
+
+  if (diffInSeconds < 60) return "Just now";
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function SubtleParticleCanvas() {
   const canvasRef = useRef(null);
@@ -39,20 +55,22 @@ function SubtleParticleCanvas() {
     const ctx = canvas.getContext("2d");
     let animationFrameId;
 
-    let width = (canvas.width = canvas.offsetWidth);
-    let height = (canvas.height = canvas.offsetHeight);
+    const dpr = window.devicePixelRatio || 1;
+    let width = (canvas.width = canvas.offsetWidth * dpr);
+    let height = (canvas.height = canvas.offsetHeight * dpr);
 
     const handleResize = () => {
       if (!canvas) return;
-      width = canvas.width = canvas.offsetWidth;
-      height = canvas.height = canvas.offsetHeight;
+      width = canvas.width = canvas.offsetWidth * dpr;
+      height = canvas.height = canvas.offsetHeight * dpr;
+      ctx.scale(dpr, dpr);
     };
 
     window.addEventListener("resize", handleResize);
 
     const particles = Array.from({ length: 28 }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
+      x: Math.random() * (width / dpr),
+      y: Math.random() * (height / dpr),
       radius: Math.random() * 2 + 1,
       vx: (Math.random() - 0.5) * 0.4,
       vy: -Math.random() * 0.5 - 0.2,
@@ -67,8 +85,8 @@ function SubtleParticleCanvas() {
         p.y += p.vy;
 
         if (p.y < -10) {
-          p.y = height + 10;
-          p.x = Math.random() * width;
+          p.y = height / dpr + 10;
+          p.x = Math.random() * (width / dpr);
         }
 
         ctx.beginPath();
@@ -103,9 +121,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const [family, setFamily] = useState(null);
-  const [memberCount, setMemberCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   const [stats, setStats] = useState(null);
   const [activities, setActivities] = useState([]);
@@ -123,9 +141,8 @@ export default function Dashboard() {
         setFamily(familyData);
 
         if (familyData) {
-          const [members, statsData, activitiesData, eventsData, birthdaysData] =
+          const [statsData, activitiesData, eventsData, birthdaysData] =
             await Promise.allSettled([
-              membershipApi.listMembers(),
               dashboardApi.getStatistics(),
               dashboardApi.getRecentActivities(),
               dashboardApi.getUpcomingEvents(),
@@ -133,13 +150,6 @@ export default function Dashboard() {
             ]);
 
           if (!isMounted) return;
-
-          if (members.status === "fulfilled") {
-            const list = Array.isArray(members.value)
-              ? members.value
-              : members.value?.results ?? [];
-            setMemberCount(list.length);
-          }
 
           if (statsData.status === "fulfilled") setStats(statsData.value);
           if (activitiesData.status === "fulfilled")
@@ -165,16 +175,26 @@ export default function Dashboard() {
     };
   }, []);
 
-  const coverUrl = resolveMediaUrl(family?.cover_image);
-  const logoUrl = resolveMediaUrl(family?.logo);
+  const coverUrl = useMemo(
+    () => resolveMediaUrl(family?.cover_image),
+    [family?.cover_image]
+  );
+  const logoUrl = useMemo(
+    () => resolveMediaUrl(family?.logo),
+    [family?.logo]
+  );
   const familyInitial = family?.name?.trim()?.[0]?.toUpperCase() || "?";
 
-  const isOwnerOrAdmin =
-    family?.owner_id === user?.id ||
-    family?.created_by === user?.id ||
-    user?.role === "admin" ||
-    family?.user_role === "admin" ||
-    family?.user_role === "owner";
+  const isOwnerOrAdmin = useMemo(() => {
+    if (!family || !user) return false;
+    return (
+      family.owner_id === user.id ||
+      family.created_by === user.id ||
+      user.role === "admin" ||
+      family.user_role === "admin" ||
+      family.user_role === "owner"
+    );
+  }, [family, user]);
 
   async function copyInviteCode() {
     if (!family?.family_code) return;
@@ -194,7 +214,7 @@ export default function Dashboard() {
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
-        {/* Executive Header Section */}
+        {/* Workspace Intelligence Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200/80 pb-5">
           <div className="space-y-1">
             <div className="flex items-center gap-1.5 text-brand-600 font-bold text-xs uppercase tracking-widest">
@@ -203,11 +223,12 @@ export default function Dashboard() {
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-stone-900 flex items-center gap-2">
               Welcome back, {user?.first_name || "Member"}
-              <span className="text-xl inline-block hover:scale-125 transition-transform duration-200 cursor-pointer">👋🏻</span>
+              <span className="text-xl inline-block hover:scale-125 transition-transform duration-200 cursor-pointer">
+                👋🏻
+              </span>
             </h1>
           </div>
 
-          {/* Quick Action Navigation Bar */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/posts")}
@@ -215,13 +236,6 @@ export default function Dashboard() {
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Family Feed</span>
-            </button>
-            <button
-              onClick={() => navigate("/families/tree")}
-              className="inline-flex items-center gap-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold px-3 py-2 rounded-xl transition-colors active:scale-95"
-            >
-              <GitFork className="w-3.5 h-3.5" />
-              <span>Family Tree</span>
             </button>
           </div>
         </div>
@@ -242,7 +256,11 @@ export default function Dashboard() {
 
                 <div>
                   <span className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md text-white text-[10px] font-extrabold uppercase tracking-widest px-3 py-0.5 rounded-full mb-1.5 border border-white/20">
-                    <Sparkles className="w-3 h-3 text-yellow-300 animate-spin" style={{ animationDuration: "4s" }} /> Celebration Today! 🎉
+                    <Sparkles
+                      className="w-3 h-3 text-yellow-300 animate-spin"
+                      style={{ animationDuration: "4s" }}
+                    />{" "}
+                    Celebration Today! 🎉
                   </span>
                   <h2 className="text-xl sm:text-2xl font-black tracking-tight drop-shadow-sm text-white">
                     Happy Birthday, {todayBirthdays.map((b) => b.member).join(" & ")}!
@@ -272,11 +290,16 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Workspace Card & Modules */}
         {!loading && family && (
           <div className="space-y-8">
-            {/* Main Family Banner Card */}
             <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-              <div className="relative w-full h-48 sm:h-64 md:h-72 bg-stone-900 overflow-hidden group">
+              
+              {/* Cover Banner Image with Preview Trigger */}
+              <div 
+                onClick={() => coverUrl && setPreviewImage({ url: coverUrl, title: `${family.name} Cover Image` })}
+                className={`relative w-full h-48 sm:h-64 md:h-72 bg-stone-900 overflow-hidden group ${coverUrl ? "cursor-pointer" : ""}`}
+              >
                 {coverUrl ? (
                   <img
                     src={coverUrl}
@@ -292,11 +315,14 @@ export default function Dashboard() {
               <div className="px-5 sm:px-8 pb-6 sm:pb-8">
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 -mt-12 sm:-mt-16 relative z-10">
                   <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-6">
+                    
+                    {/* Logo Image with Preview Trigger */}
                     <div className="relative shrink-0">
                       {logoUrl ? (
                         <img
+                          onClick={() => setPreviewImage({ url: logoUrl, title: `${family.name} Logo` })}
                           src={logoUrl}
-                          className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover ring-4 ring-white shadow-md bg-white hover:scale-105 transition-transform duration-300"
+                          className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover ring-4 ring-white shadow-md bg-white hover:scale-105 transition-transform duration-300 cursor-pointer"
                           alt={`${family.name} logo`}
                         />
                       ) : (
@@ -334,11 +360,12 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto pt-2 lg:pt-16 shrink-0">
+                  {/* Code Button Wrapper with Pushed Down Spacing */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto pt-4 lg:pt-20 shrink-0">
                     <button
                       onClick={copyInviteCode}
                       type="button"
-                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all duration-150 active:scale-95 text-xs cursor-pointer"
+                      className="mt-1 sm:mt-0 flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all duration-150 active:scale-95 text-xs cursor-pointer"
                     >
                       {copied ? (
                         <>
@@ -354,37 +381,11 @@ export default function Dashboard() {
                         </>
                       )}
                     </button>
-
-                    {isOwnerOrAdmin && (
-                      <button
-                        onClick={() => navigate("/families/join-requests")}
-                        type="button"
-                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all duration-150 active:scale-95 text-xs cursor-pointer"
-                      >
-                        <Inbox className="w-4 h-4 text-stone-500" />
-                        <span>Join Requests</span>
-                      </button>
-                    )}
                   </div>
                 </div>
 
-                {/* Dashboard Interactive Metrics Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-8 pt-6 border-t border-stone-100">
-                  <div
-                    onClick={() => navigate("/families/members")}
-                    className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-brand-400 hover:bg-white hover:shadow-md transition-all duration-200 group cursor-pointer"
-                  >
-                    <div className="p-2.5 rounded-xl bg-brand-50 text-brand-600 shrink-0 group-hover:scale-110 transition-transform">
-                      <Users className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="text-xs text-stone-500 font-medium">Total Members</div>
-                      <div className="text-xl sm:text-2xl font-bold text-stone-900 mt-0.5">
-                        {memberCount ?? stats?.members ?? 0}
-                      </div>
-                    </div>
-                  </div>
-
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-8 pt-6 border-t border-stone-100">
                   <div
                     onClick={() => navigate("/posts")}
                     className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-emerald-400 hover:bg-white hover:shadow-md transition-all duration-200 group cursor-pointer"
@@ -400,7 +401,10 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-indigo-400 hover:bg-white hover:shadow-md transition-all duration-200 group">
+                  <div
+                    onClick={() => navigate("/posts")}
+                    className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-indigo-400 hover:bg-white hover:shadow-md transition-all duration-200 group cursor-pointer"
+                  >
                     <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 shrink-0 group-hover:scale-110 transition-transform">
                       <ImageIcon className="w-5 h-5" />
                     </div>
@@ -432,9 +436,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Quick Navigation Hub with Direct Links */}
+            {/* Quick Navigation Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {/* Link to Family Feed */}
               <button
                 onClick={() => navigate("/posts")}
                 type="button"
@@ -454,7 +457,6 @@ export default function Dashboard() {
                 </div>
               </button>
 
-              {/* Link to My Posts */}
               <button
                 onClick={() => navigate("/posts/my-posts")}
                 type="button"
@@ -474,69 +476,6 @@ export default function Dashboard() {
                 </div>
               </button>
 
-              {/* Link to Family Tree */}
-              <button
-                onClick={() => navigate("/families/tree")}
-                type="button"
-                className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
-              >
-                <div>
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
-                    <GitFork className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
-                    Family Tree
-                    <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                  </h3>
-                  <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
-                    View family member connections and visual lineage graph.
-                  </p>
-                </div>
-              </button>
-
-              {/* Link to Member Directory */}
-              <button
-                onClick={() => navigate("/families/members")}
-                type="button"
-                className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
-              >
-                <div>
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
-                    <Users className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
-                    Family Directory
-                    <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                  </h3>
-                  <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
-                    View active member roles, profiles, and permissions.
-                  </p>
-                </div>
-              </button>
-
-              {/* Link to Join Requests (Owner/Admin only) */}
-              {isOwnerOrAdmin && (
-                <button
-                  onClick={() => navigate("/families/join-requests")}
-                  type="button"
-                  className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
-                >
-                  <div>
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
-                      <UserPlus className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
-                      Join Requests
-                      <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                    </h3>
-                    <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
-                      Review, approve, or reject pending family membership requests.
-                    </p>
-                  </div>
-                </button>
-              )}
-
-              {/* Link to Workspace Settings (Owner/Admin only) */}
               {isOwnerOrAdmin && (
                 <button
                   onClick={() => navigate("/families/settings")}
@@ -559,43 +498,50 @@ export default function Dashboard() {
               )}
             </div>
 
+            {/* Bottom Panel: Scrollable Activity & Events */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm p-6 space-y-4 hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-brand-600 animate-pulse" />
-                    Recent Family Activity
+              {/* Short & Scrollable Recent Family Activity Card (Scrollbar Hidden) */}
+              <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm p-6 space-y-3 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between pb-1 border-b border-stone-100">
+                  <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-brand-600 animate-pulse" />
+                    Recent Activity
                   </h3>
                   <span className="text-[10px] font-extrabold text-stone-400 uppercase tracking-widest">
-                    Live Updates
+                    Live
                   </span>
                 </div>
 
                 {activities.length === 0 ? (
-                  <p className="text-sm text-stone-500 py-6 text-center">
+                  <p className="text-xs text-stone-500 py-6 text-center">
                     No recent activity recorded yet.
                   </p>
                 ) : (
-                  <div className="space-y-4 pt-2">
+                  <div className="max-h-64 overflow-y-auto no-scrollbar space-y-2.5">
                     {activities.map((act, index) => (
-                      <div key={index} className="flex items-start gap-3 relative group">
-                        <div className="w-2.5 h-2.5 rounded-full bg-brand-500 shrink-0 mt-1.5 ring-4 ring-brand-50 group-hover:scale-125 transition-transform" />
-                        <div className="flex-1 min-w-0 bg-stone-50/60 rounded-xl p-3 border border-stone-100 group-hover:border-stone-200 group-hover:bg-white transition-all">
-                          <p className="text-sm text-stone-900 leading-tight">
-                            <span className="font-semibold">{act.actor}</span>{" "}
+                      <div
+                        key={index}
+                        className="flex items-center justify-between gap-3 bg-stone-50/70 hover:bg-stone-100/80 p-2.5 rounded-xl border border-stone-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-2 h-2 rounded-full bg-brand-500 shrink-0" />
+                          <p className="text-xs text-stone-800 truncate">
+                            <span className="font-semibold text-stone-900">{act.actor}</span>{" "}
                             <span className="text-stone-600">{act.action}</span>
                           </p>
-                          <p className="text-[11px] text-stone-400 mt-1.5 flex items-center gap-1 font-medium">
-                            <Clock className="w-3 h-3" />
-                            {new Date(act.timestamp).toLocaleString()}
-                          </p>
                         </div>
+
+                        <span className="text-[10px] text-stone-400 font-medium shrink-0 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-stone-400" />
+                          {formatShortTime(act.timestamp)}
+                        </span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
+              {/* Events & Birthdays Sidebar */}
               <div className="space-y-6">
                 <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm p-6 space-y-4 hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2">
@@ -668,6 +614,7 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Empty State */}
         {!loading && !family && (
           <div className="bg-white rounded-3xl border border-stone-200/80 shadow-sm text-center px-6 py-16 sm:py-20 max-w-2xl mx-auto my-8">
             <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner animate-pulse">
@@ -704,6 +651,42 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      {/* Image Lightbox Modal */}
+      {previewImage && (
+        <div
+          onClick={() => setPreviewImage(null)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-zoom-out"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="relative max-w-4xl w-full max-h-[90vh] bg-stone-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col items-center justify-center border border-white/10"
+          >
+            <button
+              onClick={() => setPreviewImage(null)}
+              type="button"
+              className="absolute top-4 right-4 z-10 p-2.5 rounded-full bg-black/50 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
+              aria-label="Close image preview"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="w-full h-full p-2 flex items-center justify-center overflow-hidden">
+              <img
+                src={previewImage.url}
+                alt={previewImage.title}
+                className="max-w-full max-h-[80vh] object-contain rounded-2xl"
+              />
+            </div>
+
+            {previewImage.title && (
+              <div className="w-full py-3 px-6 bg-stone-900/90 border-t border-white/10 text-center">
+                <p className="text-xs font-semibold text-stone-300">{previewImage.title}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
