@@ -1,13 +1,11 @@
 import axios from "axios";
 
-// Hardcode fallback with trailing slash to prevent Vite env parsing issues
+// Fallback base URL
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
-// Ensure clean trailing slash normalization
-const normalizedBaseURL = API_BASE_URL.endsWith("/")
-  ? API_BASE_URL
-  : `${API_BASE_URL}/`;
+// 🎯 FIX 1: Strip trailing slashes from baseURL to prevent "//" double slashes
+const normalizedBaseURL = API_BASE_URL.replace(/\/+$/, "");
 
 export const apiClient = axios.create({
   baseURL: normalizedBaseURL,
@@ -23,7 +21,11 @@ apiClient.interceptors.request.use(
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
-    console.log(`[API Request] ${config.method?.toUpperCase()} -> ${config.baseURL}${config.url}`);
+
+    // 🎯 FIX 2: Ensure clean URL logging without double slashes
+    const endpoint = config.url?.startsWith("/") ? config.url : `/${config.url}`;
+    console.log(`[API Request] ${config.method?.toUpperCase()} -> ${config.baseURL}${endpoint}`);
+    
     return config;
   },
   (error) => {
@@ -49,20 +51,17 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Log Network/CORS/Auth Failures explicitly
     console.error(
       `[API Response Error] ${error.config?.url} | Status: ${error.response?.status || "NETWORK_ERROR"}`,
       error.response?.data || error.message
     );
 
-    // If error is not 401 or has already been retried, reject immediately
     if (error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }
 
     const refreshToken = localStorage.getItem("refresh_token");
-    
-    // If no refresh token exists, purge auth state and redirect to login
+
     if (!refreshToken) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
@@ -85,8 +84,8 @@ apiClient.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      // Django JWT refresh endpoint (matches /api/auth/token/refresh/)
-      const refreshUrl = `${normalizedBaseURL}auth/token/refresh/`;
+      // 🎯 FIX 3: Clean refresh endpoint path
+      const refreshUrl = `${normalizedBaseURL}/auth/token/refresh/`;
       const { data } = await axios.post(refreshUrl, {
         refresh: refreshToken,
       });
@@ -109,5 +108,4 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Default export added here
 export default apiClient;

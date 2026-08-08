@@ -36,9 +36,9 @@ export default function CommentsSection({ postId, currentUserId, onCommentCountC
     onCountChangeRef.current = onCommentCountChange;
   }, [onCommentCountChange]);
 
-  const fetchComments = async (isInitial = false) => {
+  const fetchComments = async () => {
     try {
-      if (isInitial) setIsLoading(true);
+      setIsLoading(true);
       const data = await getPostComments(postId);
       const list = data.results || [];
 
@@ -48,26 +48,15 @@ export default function CommentsSection({ postId, currentUserId, onCommentCountC
         onCountChangeRef.current(list.length);
       }
     } catch (err) {
-      if (isInitial) toast.error("Failed to load comments.");
+      toast.error("Failed to load comments.");
     } finally {
-      if (isInitial) setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    let isMounted = true;
-
     if (postId) {
-      fetchComments(true);
-
-      const interval = setInterval(() => {
-        if (isMounted) fetchComments(false);
-      }, 3000);
-
-      return () => {
-        isMounted = false;
-        clearInterval(interval);
-      };
+      fetchComments();
     }
   }, [postId]);
 
@@ -171,7 +160,7 @@ export default function CommentsSection({ postId, currentUserId, onCommentCountC
 
   return (
     <div className="mt-3 pt-3 border-t border-stone-100 flex flex-col gap-3">
-      {/* Comments List */}
+      {/* Comments List (Scrollable, but scrollbar is completely hidden) */}
       {isLoading ? (
         <div className="flex items-center justify-center py-4 text-stone-400">
           <Loader2 size={18} className="animate-spin mr-2" />
@@ -183,7 +172,7 @@ export default function CommentsSection({ postId, currentUserId, onCommentCountC
           No comments yet. Be the first to reply!
         </div>
       ) : (
-        <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
+        <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pr-1">
           {comments.map((comment) => (
             <CommentItem
               key={comment.id}
@@ -261,7 +250,7 @@ export default function CommentsSection({ postId, currentUserId, onCommentCountC
           <div className="absolute right-12 bottom-full mb-2 w-64 bg-white border border-stone-200 rounded-2xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in duration-150">
             <div className="flex items-center justify-between border-b border-stone-100 pb-1.5">
               {/* 5 Category Navigation Tabs */}
-              <div className="flex items-center gap-1 overflow-x-auto">
+              <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {EMOJI_CATEGORIES.map((cat, idx) => (
                   <button
                     key={cat.name}
