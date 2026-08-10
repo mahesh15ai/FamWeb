@@ -19,6 +19,7 @@ import FamilyTree from "./pages/FamilyTree";
 import Posts from "./pages/Posts";
 import MyPosts from "./pages/MyPosts";
 import AlbumsPage from "./pages/AlbumsPage"; // Day 12 Albums Page
+import AlbumDetailPage from "./pages/AlbumDetailPage"; // Day 13 Photos Page
 
 export default function App() {
   return (
@@ -40,6 +41,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Day 12 & Day 13 Routes */}
           <Route
             path="/albums"
             element={
@@ -48,6 +51,15 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/albums/:id"
+            element={
+              <ProtectedRoute>
+                <AlbumDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/families/create"
             element={

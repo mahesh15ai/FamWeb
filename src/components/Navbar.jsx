@@ -46,23 +46,39 @@ export default function Navbar() {
     family?.user_role === "owner";
 
   useEffect(() => {
-    familiesApi.getMyFamily().then(setFamily).catch(() => setFamily(null));
+    familiesApi
+      .getMyFamily()
+      .then((fam) => {
+        setFamily(fam);
 
-    joinRequestsApi
-      .listJoinRequests()
-      .then((requests) => {
-        setCanManageRequests(true);
-        setPendingCount(
-          requests.filter((r) => r.status === "PENDING").length
-        );
+        // Safely evaluate ownership/admin status
+        const isManager =
+          fam?.owner_id === user?.id ||
+          fam?.created_by === user?.id ||
+          user?.role === "admin" ||
+          fam?.user_role === "admin" ||
+          fam?.user_role === "owner";
+
+        // ONLY fetch join requests if user is an owner/admin
+        if (isManager) {
+          joinRequestsApi
+            .listJoinRequests()
+            .then((requests) => {
+              setCanManageRequests(true);
+              setPendingCount(
+                requests.filter((r) => r.status === "PENDING").length
+              );
+            })
+            .catch(() => setCanManageRequests(false));
+        } else {
+          setCanManageRequests(false);
+        }
       })
-      .catch(() => {
-        setCanManageRequests(false);
-      });
+      .catch(() => setFamily(null));
 
     setMobileNavOpen(false);
     setMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, user?.id]);
 
   // Click Outside Listener for User Dropdown
   useEffect(() => {
@@ -109,7 +125,6 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white/90 backdrop-blur-md transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        
         {/* Brand Logo & Desktop Nav Links */}
         <div className="flex items-center gap-8">
           <button
@@ -136,7 +151,9 @@ export default function Navbar() {
           {/* Desktop Links */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map(({ to, label, icon: Icon, badge }) => {
-              const active = location.pathname === to;
+              const active =
+                location.pathname === to ||
+                (to === "/albums" && location.pathname.startsWith("/albums"));
               return (
                 <button
                   key={to}
@@ -148,7 +165,11 @@ export default function Navbar() {
                       : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${active ? "text-brand-600" : "text-stone-400"}`} />
+                  <Icon
+                    className={`w-4 h-4 ${
+                      active ? "text-brand-600" : "text-stone-400"
+                    }`}
+                  />
                   <span>{label}</span>
                   {!!badge && badge > 0 && (
                     <span className="relative flex h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[11px] font-bold shadow-sm">
@@ -181,7 +202,12 @@ export default function Navbar() {
                   {user?.email}
                 </p>
               </div>
-              <ChevronDown size={14} className={`text-stone-400 transition-transform duration-200 hidden sm:block ${menuOpen ? "rotate-180" : ""}`} />
+              <ChevronDown
+                size={14}
+                className={`text-stone-400 transition-transform duration-200 hidden sm:block ${
+                  menuOpen ? "rotate-180" : ""
+                }`}
+              />
             </button>
 
             {menuOpen && (
@@ -282,7 +308,9 @@ export default function Navbar() {
         <div className="md:hidden border-t border-stone-200/80 bg-white px-4 pt-3 pb-6 space-y-2 shadow-lg">
           <div className="space-y-1">
             {navLinks.map(({ to, label, icon: Icon, badge }) => {
-              const active = location.pathname === to;
+              const active =
+                location.pathname === to ||
+                (to === "/albums" && location.pathname.startsWith("/albums"));
               return (
                 <button
                   key={to}
@@ -295,7 +323,11 @@ export default function Navbar() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className={`w-5 h-5 ${active ? "text-brand-600" : "text-stone-400"}`} />
+                    <Icon
+                      className={`w-5 h-5 ${
+                        active ? "text-brand-600" : "text-stone-400"
+                      }`}
+                    />
                     <span>{label}</span>
                   </div>
                   {!!badge && badge > 0 && (
