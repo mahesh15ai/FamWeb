@@ -11,6 +11,7 @@ import {
   UserCheck,
   UserCog,
   GitBranch,
+  Layers,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -88,6 +89,7 @@ export default function Navbar() {
 
   const navLinks = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/albums", label: "Albums", icon: Layers },
     { to: "/families/members", label: "Directory", icon: Users },
     { to: "/families/tree", label: "Family Tree", icon: GitBranch },
     ...(canManageRequests
@@ -192,6 +194,17 @@ export default function Navbar() {
                 </div>
 
                 <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate("/albums");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium"
+                  >
+                    <Layers size={16} className="text-stone-400" />
+                    Family Albums
+                  </button>
+
                   <button
                     onClick={() => {
                       setMenuOpen(false);

@@ -1,47 +1,112 @@
 import { useState, useEffect } from "react";
-import { Clock, Edit2, Trash2, MessageSquare, X, Maximize2 } from "lucide-react";
+import {
+  Clock,
+  Edit2,
+  Trash2,
+  MessageSquare,
+  X,
+  Maximize2,
+  Heart,
+  Users,
+} from "lucide-react";
 import { resolveMediaUrl } from "../utils/media";
-import CommentsSection from "./CommentsSection";
+import CommentsSection from "../components/CommentsSection";
 import { getPostComments } from "../api/commentService";
+import { likePost, unlikePost, getPostLikes } from "../api/likeService";
+import { useToast } from "../context/ToastContext";
 
 export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
+  if (!post) return null;
+
+  const toast = useToast();
+
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(post.content || "");
   const [submitting, setSubmitting] = useState(false);
 
-  // Comments state
+  // Day 11 Likes State
+  const [isLiked, setIsLiked] = useState(Boolean(post.is_liked));
+  const [likeCount, setLikeCount] = useState(post.likes_count ?? post.likes ?? 0);
+  const [likers, setLikers] = useState([]);
+  const [showLikersModal, setShowLikersModal] = useState(false);
+  const [loadingLikers, setLoadingLikers] = useState(false);
+
+  // Comments State
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(
     post.comments_count ?? post.comments ?? 0
   );
 
   // Lightbox Media Modal State
-  const [activeMedia, setActiveMedia] = useState(null); // { url, type: 'image' | 'video' }
+  const [activeMedia, setActiveMedia] = useState(null);
 
-  // Fetch comment count on mount
+  // Auto-refresh likes & comments data on render
   useEffect(() => {
     let isMounted = true;
 
-    async function loadCommentCount() {
+    async function refreshPostData() {
       try {
-        const data = await getPostComments(post.id);
-        const list = data.results || [];
+        const commentsData = await getPostComments(post.id);
+        const commentList = commentsData.results || [];
+        if (isMounted) setCommentCount(commentList.length);
+
+        const likesData = await getPostLikes(post.id);
+        const likesList = likesData.results || [];
         if (isMounted) {
-          setCommentCount(list.length);
+          setLikeCount(likesData.count ?? likesList.length);
+
+          // Check if current user is in the returned likes list
+          const userHasLiked = likesList.some(
+            (item) => item.user_id === currentUserId || item.user === currentUserId
+          );
+          setIsLiked(userHasLiked);
         }
       } catch (err) {
-        // Fallback to initial count
+        // Fallback silently
       }
     }
 
-    if (post?.id) {
-      loadCommentCount();
-    }
+    if (post?.id) refreshPostData();
 
     return () => {
       isMounted = false;
     };
-  }, [post.id]);
+  }, [post.id, currentUserId]);
+
+  // Handle Like / Unlike Action
+  const handleToggleLike = async () => {
+    const previousLikedState = isLiked;
+    const previousCount = likeCount;
+
+    setIsLiked(!previousLikedState);
+    setLikeCount((prev) => (previousLikedState ? prev - 1 : prev + 1));
+
+    try {
+      if (previousLikedState) {
+        await unlikePost(post.id);
+      } else {
+        await likePost(post.id);
+      }
+    } catch (err) {
+      setIsLiked(previousLikedState);
+      setLikeCount(previousCount);
+      toast.error("Failed to update like status.");
+    }
+  };
+
+  // Fetch & Show users who liked the post
+  const handleOpenLikersModal = async () => {
+    setShowLikersModal(true);
+    setLoadingLikers(true);
+    try {
+      const data = await getPostLikes(post.id);
+      setLikers(data.results || []);
+    } catch (err) {
+      toast.error("Failed to load likes list.");
+    } finally {
+      setLoadingLikers(false);
+    }
+  };
 
   const isAuthor = currentUserId === post.author;
   const avatarUrl = resolveMediaUrl(post.author_profile_photo);
@@ -53,8 +118,6 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
       setSubmitting(true);
       await onUpdate(post.id, content.trim());
       setIsEditing(false);
-    } catch {
-      // Handled by parent toast
     } finally {
       setSubmitting(false);
     }
@@ -69,7 +132,7 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
             {avatarUrl ? (
               <img
                 src={avatarUrl}
-                alt={post.author_name}
+                alt={post.author_name || "Author"}
                 className="w-10 h-10 rounded-2xl object-cover ring-2 ring-stone-100"
               />
             ) : (
@@ -84,7 +147,7 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
               </h4>
               <p className="text-[11px] text-stone-400 flex items-center gap-1 font-medium">
                 <Clock className="w-3 h-3" />
-                {new Date(post.created_at).toLocaleString()}
+                {post.created_at ? new Date(post.created_at).toLocaleString() : ""}
               </p>
             </div>
           </div>
@@ -107,7 +170,7 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
           )}
         </div>
 
-        {/* Post Content & Media */}
+        {/* Content / Edit Mode */}
         {isEditing ? (
           <div className="space-y-3 pt-2">
             <textarea
@@ -143,7 +206,7 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
               </p>
             )}
 
-            {/* CLICKABLE IMAGE ATTACHMENT */}
+            {/* Image Attachment */}
             {imageUrl && (
               <div
                 onClick={() => setActiveMedia({ url: imageUrl, type: "image" })}
@@ -162,7 +225,7 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
               </div>
             )}
 
-            {/* CLICKABLE VIDEO ATTACHMENT */}
+            {/* Video Attachment */}
             {videoUrl && (
               <div
                 onClick={() => setActiveMedia({ url: videoUrl, type: "video" })}
@@ -177,8 +240,35 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
               </div>
             )}
 
-            {/* Comment Action Footer */}
+            {/* Post Action Buttons */}
             <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleToggleLike}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all active:scale-125 cursor-pointer text-xs font-medium ${
+                    isLiked
+                      ? "bg-rose-50 text-rose-600 font-bold"
+                      : "hover:bg-stone-100 text-stone-600"
+                  }`}
+                >
+                  <Heart
+                    className={`w-4 h-4 ${
+                      isLiked ? "fill-rose-500 text-rose-500" : "text-stone-400"
+                    }`}
+                  />
+                  <span>{isLiked ? "Liked" : "Like"}</span>
+                </button>
+
+                {likeCount > 0 && (
+                  <button
+                    onClick={handleOpenLikersModal}
+                    className="text-xs font-semibold text-stone-500 hover:text-stone-800 hover:underline cursor-pointer px-1"
+                  >
+                    {likeCount} {likeCount === 1 ? "Like" : "Likes"}
+                  </button>
+                )}
+              </div>
+
               <button
                 onClick={() => setShowComments((prev) => !prev)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-stone-100 text-stone-600 text-xs font-medium transition-colors cursor-pointer"
@@ -190,7 +280,6 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
               </button>
             </div>
 
-            {/* Expandable Comments Section */}
             {showComments && (
               <CommentsSection
                 postId={post.id}
@@ -202,13 +291,57 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
         )}
       </div>
 
-      {/* FULL-SCREEN MEDIA LIGHTBOX MODAL */}
+      {/* Likers Modal Popup */}
+      {showLikersModal && (
+        <div
+          onClick={() => setShowLikersModal(false)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl border border-stone-100"
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                <Users className="w-4 h-4 text-rose-500" />
+                Liked by
+              </h3>
+              <button
+                onClick={() => setShowLikersModal(false)}
+                className="text-stone-400 hover:text-stone-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {loadingLikers ? (
+              <div className="py-6 text-center text-xs text-stone-400">Loading likers…</div>
+            ) : likers.length === 0 ? (
+              <div className="py-6 text-center text-xs text-stone-400">No likes yet.</div>
+            ) : (
+              <div className="max-h-60 overflow-y-auto space-y-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pr-1">
+                {likers.map((item, index) => (
+                  <div key={index} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-stone-50">
+                    <div className="w-7 h-7 rounded-full bg-rose-100 text-rose-600 font-bold text-xs flex items-center justify-center shrink-0">
+                      {(item.user || item.username || "U")[0]?.toUpperCase()}
+                    </div>
+                    <span className="text-xs font-semibold text-stone-800">
+                      {item.user || item.username || "Family Member"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Media Lightbox Modal */}
       {activeMedia && (
         <div
           onClick={() => setActiveMedia(null)}
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-zoom-out"
         >
-          {/* Close Button */}
           <button
             onClick={() => setActiveMedia(null)}
             className="absolute top-5 right-5 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors cursor-pointer z-10"
@@ -216,7 +349,6 @@ export default function PostCard({ post, currentUserId, onUpdate, onDelete }) {
             <X size={24} />
           </button>
 
-          {/* Media Display */}
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative max-w-5xl max-h-[90vh] flex items-center justify-center overflow-hidden rounded-2xl"

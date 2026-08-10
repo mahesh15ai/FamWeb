@@ -18,6 +18,7 @@ import EditProfile from "./pages/EditProfile";
 import FamilyTree from "./pages/FamilyTree";
 import Posts from "./pages/Posts";
 import MyPosts from "./pages/MyPosts";
+import AlbumsPage from "./pages/AlbumsPage"; // Day 12 Albums Page
 
 export default function App() {
   return (
@@ -36,6 +37,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/albums"
+            element={
+              <ProtectedRoute>
+                <AlbumsPage />
               </ProtectedRoute>
             }
           />

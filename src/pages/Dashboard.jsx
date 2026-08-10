@@ -19,6 +19,7 @@ import {
   Zap,
   MessageSquare,
   X,
+  Layers,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -140,7 +141,6 @@ export default function Dashboard() {
         const familyRes = await familiesApi.getMyFamily();
         if (!isMounted) return;
 
-        // 🎯 FIX 1: Safely extract family object whether returned directly or inside results array
         const activeFamily = Array.isArray(familyRes?.results)
           ? familyRes.results[0]
           : familyRes?.id
@@ -160,7 +160,6 @@ export default function Dashboard() {
 
           if (!isMounted) return;
 
-          // 🎯 FIX 2: Safe extraction of values from all endpoints
           if (statsData.status === "fulfilled") {
             setStats(statsData.value?.data || statsData.value || null);
           }
@@ -419,14 +418,14 @@ export default function Dashboard() {
                   </div>
 
                   <div
-                    onClick={() => navigate("/posts")}
+                    onClick={() => navigate("/albums")}
                     className="bg-stone-50/80 border border-stone-200/60 rounded-2xl p-4 flex items-center gap-3.5 hover:border-indigo-400 hover:bg-white hover:shadow-md transition-all duration-200 group cursor-pointer"
                   >
                     <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 shrink-0 group-hover:scale-110 transition-transform">
                       <ImageIcon className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="text-xs text-stone-500 font-medium">Photos</div>
+                      <div className="text-xs text-stone-500 font-medium">Albums & Photos</div>
                       <div className="text-xl sm:text-2xl font-bold text-stone-900 mt-0.5">
                         {stats?.photos ?? stats?.total_photos ?? 0}
                       </div>
@@ -474,6 +473,26 @@ export default function Dashboard() {
                 </div>
               </button>
 
+              {/* Day 12 Albums Card */}
+              <button
+                onClick={() => navigate("/albums")}
+                type="button"
+                className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-amber-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
+              >
+                <div>
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-50 text-amber-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
+                    <Layers className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-stone-900 group-hover:text-amber-600 transition-colors flex items-center justify-between">
+                    Family Albums
+                    <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-amber-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                  </h3>
+                  <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
+                    Organize memories, trips, and family event photo collections.
+                  </p>
+                </div>
+              </button>
+
               <button
                 onClick={() => navigate("/posts/my-posts")}
                 type="button"
@@ -492,27 +511,6 @@ export default function Dashboard() {
                   </p>
                 </div>
               </button>
-
-              {isOwnerOrAdmin && (
-                <button
-                  onClick={() => navigate("/families/settings")}
-                  type="button"
-                  className="group relative bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover:shadow-md hover:border-brand-400 transition-all duration-300 text-left flex flex-col justify-between hover:-translate-y-1 cursor-pointer"
-                >
-                  <div>
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 transition-colors mb-4 group-hover:scale-110 transition-transform">
-                      <SlidersHorizontal className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-lg font-bold text-stone-900 group-hover:text-brand-600 transition-colors flex items-center justify-between">
-                      Workspace Settings
-                      <ArrowUpRight className="w-5 h-5 text-stone-400 group-hover:text-brand-600 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                    </h3>
-                    <p className="text-sm text-stone-500 mt-1.5 leading-relaxed">
-                      Update family metadata, cover banner graphic, and controls.
-                    </p>
-                  </div>
-                </button>
-              )}
             </div>
 
             {/* Bottom Panel: Scrollable Activity & Events */}
