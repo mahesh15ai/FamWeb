@@ -18,8 +18,9 @@ import EditProfile from "./pages/EditProfile";
 import FamilyTree from "./pages/FamilyTree";
 import Posts from "./pages/Posts";
 import MyPosts from "./pages/MyPosts";
-import AlbumsPage from "./pages/AlbumsPage"; // Day 12 Albums Page
-import AlbumDetailPage from "./pages/AlbumDetailPage"; // Day 13 Photos Page
+import AlbumsPage from "./pages/AlbumsPage";
+import AlbumDetailPage from "./pages/AlbumDetailPage";
+import EventsPage from "./pages/EventsPage"; // Family Events & Calendar
 
 export default function App() {
   return (
@@ -42,7 +43,7 @@ export default function App() {
             }
           />
 
-          {/* Day 12 & Day 13 Routes */}
+          {/* Albums & Media Routes */}
           <Route
             path="/albums"
             element={
@@ -60,6 +61,17 @@ export default function App() {
             }
           />
 
+          {/* Family Events & Calendar Route */}
+          <Route
+            path="/events"
+            element={
+              <ProtectedRoute>
+                <EventsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Workspace & Directory Routes */}
           <Route
             path="/families/create"
             element={
@@ -117,6 +129,7 @@ export default function App() {
             }
           />
 
+          {/* Posts Routes */}
           <Route
             path="/posts"
             element={
