@@ -19,6 +19,8 @@ import {
   MessageSquare,
   UserPlus,
   Sparkles,
+  Search,
+  MoreHorizontal,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -32,8 +34,8 @@ import {
   deleteNotification,
 } from "../api/notificationService";
 import { resolveMediaUrl } from "../utils/media";
+import SearchModal from "./SearchModal";
 
-// Relative time helper for notifications
 function formatShortTime(timestamp) {
   if (!timestamp) return "";
   const date = new Date(timestamp);
@@ -58,8 +60,11 @@ export default function Navbar() {
 
   const userDropdownRef = useRef(null);
   const notifDropdownRef = useRef(null);
+  const moreDropdownRef = useRef(null);
 
-  // Family & Join Request state
+  // States
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [canManageRequests, setCanManageRequests] = useState(false);
   const [family, setFamily] = useState(null);
@@ -67,7 +72,7 @@ export default function Navbar() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Notification state
+  // Notifications
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -82,7 +87,19 @@ export default function Navbar() {
     family?.user_role === "admin" ||
     family?.user_role === "owner";
 
-  // Fetch Family & Join Requests
+  // Ctrl + K Shortcut
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Fetch Family & Requests
   useEffect(() => {
     familiesApi
       .getMyFamily()
@@ -115,9 +132,10 @@ export default function Navbar() {
     setMobileNavOpen(false);
     setMenuOpen(false);
     setNotifOpen(false);
+    setMoreMenuOpen(false);
   }, [location.pathname, user?.id]);
 
-  // Fetch Notifications
+  // Notifications Fetch
   const fetchNotificationsList = async () => {
     if (!user) return;
     try {
@@ -131,12 +149,11 @@ export default function Navbar() {
 
   useEffect(() => {
     fetchNotificationsList();
-    // Background polling every 30 seconds
     const interval = setInterval(fetchNotificationsList, 30000);
     return () => clearInterval(interval);
   }, [user?.id]);
 
-  // Click Outside Listener for Popups
+  // Click Outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
@@ -145,12 +162,14 @@ export default function Navbar() {
       if (notifDropdownRef.current && !notifDropdownRef.current.contains(event.target)) {
         setNotifOpen(false);
       }
+      if (moreDropdownRef.current && !moreDropdownRef.current.contains(event.target)) {
+        setMoreMenuOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Notification Handlers
   const handleMarkAsRead = async (id, targetUrl) => {
     try {
       await markNotificationAsRead(id);
@@ -163,7 +182,7 @@ export default function Navbar() {
         navigate(targetUrl);
       }
     } catch (err) {
-      console.error("Failed to mark notification as read:", err);
+      console.error("Failed to mark read:", err);
     }
   };
 
@@ -173,7 +192,7 @@ export default function Navbar() {
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
     } catch (err) {
-      console.error("Failed to mark all as read:", err);
+      console.error("Failed to mark all read:", err);
     }
   };
 
@@ -217,9 +236,16 @@ export default function Navbar() {
     }
   }
 
-  const navLinks = [
+  // Primary links shown directly on Navbar
+  const primaryLinks = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/posts", label: "Feed", icon: MessageSquare },
     { to: "/albums", label: "Albums", icon: Layers },
+    { to: "/events", label: "Events", icon: Calendar },
+  ];
+
+  // Secondary links tucked cleanly into the "More" dropdown
+  const secondaryLinks = [
     { to: "/families/members", label: "Directory", icon: Users },
     { to: "/families/tree", label: "Family Tree", icon: GitBranch },
     ...(canManageRequests
@@ -234,38 +260,40 @@ export default function Navbar() {
       : []),
   ];
 
+  const allNavLinks = [...primaryLinks, ...secondaryLinks];
+  const isSecondaryActive = secondaryLinks.some((link) => location.pathname === link.to);
   const logoUrl = resolveMediaUrl(family?.logo);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white/90 backdrop-blur-md transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white/95 backdrop-blur-md">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         
-        {/* Brand Logo & Desktop Nav Links */}
-        <div className="flex items-center gap-8">
+        {/* Left: Family Logo & Main Navigation */}
+        <div className="flex items-center gap-6 shrink-0">
           <button
             type="button"
             onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2.5 focus:outline-none rounded-xl transition-transform active:scale-[0.98] cursor-pointer"
+            className="flex items-center gap-2.5 focus:outline-hidden transition-transform active:scale-95 cursor-pointer shrink-0"
           >
             {logoUrl ? (
               <img
                 src={logoUrl}
                 alt={`${family?.name || "Family"} logo`}
-                className="h-9 w-9 rounded-xl object-cover border border-stone-200/80 shadow-xs"
+                className="h-9 w-9 rounded-xl object-cover border border-stone-200 shadow-xs shrink-0"
               />
             ) : (
-              <div className="h-9 w-9 rounded-xl bg-brand-600 flex items-center justify-center text-white font-black text-base shadow-xs">
+              <div className="h-9 w-9 rounded-xl bg-brand-600 flex items-center justify-center text-white font-black text-base shadow-xs shrink-0">
                 {family?.name?.[0]?.toUpperCase() || "F"}
               </div>
             )}
-            <span className="font-extrabold text-stone-900 tracking-tight text-base sm:text-lg">
+            <span className="font-extrabold text-stone-900 tracking-tight text-base whitespace-nowrap">
               {family?.name ?? "FamilyHub"}
             </span>
           </button>
 
-          {/* Desktop Links */}
+          {/* Primary Nav Links */}
           <nav className="hidden md:flex items-center gap-1">
-            {navLinks.map(({ to, label, icon: Icon, badge }) => {
+            {primaryLinks.map(({ to, label, icon: Icon }) => {
               const active =
                 location.pathname === to ||
                 (to === "/albums" && location.pathname.startsWith("/albums"));
@@ -274,9 +302,9 @@ export default function Navbar() {
                   key={to}
                   onClick={() => navigate(to)}
                   type="button"
-                  className={`relative flex items-center gap-2 text-sm font-semibold px-3.5 py-2 rounded-xl transition-all duration-150 cursor-pointer ${
+                  className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl whitespace-nowrap transition-all cursor-pointer ${
                     active
-                      ? "bg-stone-100 text-stone-900 shadow-xs"
+                      ? "bg-stone-100 text-stone-900 font-bold shadow-xs"
                       : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
                   }`}
                 >
@@ -286,22 +314,90 @@ export default function Navbar() {
                     }`}
                   />
                   <span>{label}</span>
-                  {!!badge && badge > 0 && (
-                    <span className="relative flex h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-red-500 text-white text-[11px] font-bold shadow-xs">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span className="relative">{badge}</span>
-                    </span>
-                  )}
                 </button>
               );
             })}
+
+            {/* "More" Dropdown Menu (Directory, Tree, Requests) */}
+            <div className="relative" ref={moreDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl whitespace-nowrap transition-all cursor-pointer ${
+                  isSecondaryActive
+                    ? "bg-stone-100 text-stone-900 font-bold"
+                    : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                }`}
+              >
+                <MoreHorizontal className="w-4 h-4 text-stone-400" />
+                <span>More</span>
+                {pendingCount > 0 && (
+                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
+                )}
+                <ChevronDown
+                  size={12}
+                  className={`text-stone-400 transition-transform duration-150 ${
+                    moreMenuOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {moreMenuOpen && (
+                <div className="absolute left-0 mt-2 w-52 bg-white border border-stone-200/80 rounded-2xl shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  {secondaryLinks.map(({ to, label, icon: Icon, badge }) => {
+                    const active = location.pathname === to;
+                    return (
+                      <button
+                        key={to}
+                        onClick={() => {
+                          setMoreMenuOpen(false);
+                          navigate(to);
+                        }}
+                        className={`w-full flex items-center justify-between px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                          active
+                            ? "bg-brand-50 text-brand-700 font-bold"
+                            : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Icon
+                            className={`w-4 h-4 ${
+                              active ? "text-brand-600" : "text-stone-400"
+                            }`}
+                          />
+                          <span>{label}</span>
+                        </div>
+                        {!!badge && badge > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black shadow-xs">
+                            {badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </nav>
         </div>
 
-        {/* Right Section: Notification Bell + User Dropdown + Mobile Toggle */}
-        <div className="flex items-center gap-2">
+        {/* Right Section: Search + Notifications + Profile */}
+        <div className="flex items-center gap-2 shrink-0">
           
-          {/* Notification Bell Dropdown */}
+          {/* Global Search Button */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            type="button"
+            className="flex items-center gap-2 bg-stone-100/80 hover:bg-stone-100 text-stone-500 hover:text-stone-900 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border border-stone-200/60 cursor-pointer"
+          >
+            <Search size={14} className="text-stone-400" />
+            <span className="hidden sm:inline">Search</span>
+            <kbd className="hidden sm:inline-block text-[10px] bg-white border border-stone-200 px-1.5 py-0.5 rounded-md font-mono text-stone-400 shadow-2xs">
+              ⌘K
+            </kbd>
+          </button>
+
+          {/* Notification Bell */}
           <div className="relative" ref={notifDropdownRef}>
             <button
               onClick={() => {
@@ -311,17 +407,17 @@ export default function Navbar() {
               }}
               type="button"
               aria-label="Notifications"
-              className="relative p-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100/80 transition-colors focus:outline-none cursor-pointer"
+              className="relative p-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer"
             >
-              <Bell size={20} />
+              <Bell size={18} />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-rose-600 text-white text-[10px] font-black rounded-full ring-2 ring-white animate-pulse shadow-xs">
+                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[17px] h-[17px] px-1 bg-rose-600 text-white text-[10px] font-black rounded-full ring-2 ring-white animate-pulse">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
             </button>
 
-            {/* Notification Popover Panel */}
+            {/* Notifications Popover */}
             {notifOpen && (
               <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-stone-200/80 p-4 space-y-3 z-50 animate-in fade-in zoom-in-95 duration-150">
                 <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
@@ -356,7 +452,6 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                {/* Notifications List */}
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center space-y-2">
                     <div className="w-10 h-10 bg-stone-100 text-stone-400 rounded-2xl flex items-center justify-center mx-auto">
@@ -410,7 +505,7 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* User Profile Dropdown */}
+          {/* User Profile Menu */}
           <div className="relative" ref={userDropdownRef}>
             <button
               onClick={() => {
@@ -418,79 +513,49 @@ export default function Navbar() {
                 setNotifOpen(false);
               }}
               type="button"
-              className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-stone-100/80 transition-colors focus:outline-none cursor-pointer"
+              className="flex items-center gap-2 p-1 rounded-xl hover:bg-stone-100 transition-colors cursor-pointer"
             >
-              <div className="h-9 w-9 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold border border-brand-200/60 shadow-xs">
+              <div className="h-8 w-8 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold border border-brand-200/60 shadow-xs shrink-0">
                 {initials}
               </div>
-              <div className="hidden lg:block text-left pr-1">
-                <p className="text-xs font-bold text-stone-900 leading-none">
-                  {user?.first_name} {user?.last_name}
-                </p>
-                <p className="text-[11px] font-medium text-stone-400 leading-tight mt-0.5 truncate max-w-[120px]">
-                  {user?.email}
-                </p>
-              </div>
               <ChevronDown
-                size={14}
-                className={`text-stone-400 transition-transform duration-200 hidden sm:block ${
+                size={13}
+                className={`text-stone-400 transition-transform duration-200 ${
                   menuOpen ? "rotate-180" : ""
                 }`}
               />
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white border border-stone-200/80 rounded-2xl shadow-lg py-1.5 z-20">
+              <div className="absolute right-0 mt-2 w-56 bg-white border border-stone-200/80 rounded-2xl shadow-xl py-1.5 z-50">
                 <div className="px-4 py-2.5 border-b border-stone-100">
-                  <p className="text-sm font-bold text-stone-900 truncate">
+                  <p className="text-xs font-bold text-stone-900 truncate">
                     {user?.first_name} {user?.last_name}
                   </p>
-                  <p className="text-xs text-stone-400 truncate">{user?.email}</p>
+                  <p className="text-[11px] text-stone-400 truncate">{user?.email}</p>
                 </div>
 
                 <div className="py-1">
                   <button
                     onClick={() => {
                       setMenuOpen(false);
-                      navigate("/albums");
-                    }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium cursor-pointer"
-                  >
-                    <Layers size={16} className="text-stone-400" />
-                    Family Albums
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
                       navigate("/profile/edit");
                     }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-semibold cursor-pointer"
                   >
-                    <UserCog size={16} className="text-stone-400" />
+                    <UserCog size={15} className="text-stone-400" />
                     Edit Profile
                   </button>
 
                   <button
                     onClick={() => {
                       setMenuOpen(false);
-                      navigate("/families/members");
+                      navigate("/notifications");
                     }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-semibold cursor-pointer"
                   >
-                    <UserCheck size={16} className="text-stone-400" />
-                    Family Directory
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      navigate("/families/tree");
-                    }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium cursor-pointer"
-                  >
-                    <GitBranch size={16} className="text-stone-400" />
-                    Family Tree
+                    <Bell size={15} className="text-stone-400" />
+                    Notifications
                   </button>
 
                   {isOwnerOrAdmin && (
@@ -499,9 +564,9 @@ export default function Navbar() {
                         setMenuOpen(false);
                         navigate("/families/settings");
                       }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-semibold cursor-pointer"
                     >
-                      <SlidersHorizontal size={16} className="text-stone-400" />
+                      <SlidersHorizontal size={15} className="text-stone-400" />
                       Family Settings
                     </button>
                   )}
@@ -511,9 +576,9 @@ export default function Navbar() {
                   <button
                     onClick={handleLogout}
                     disabled={loggingOut}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium disabled:opacity-60 cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors font-semibold disabled:opacity-60 cursor-pointer"
                   >
-                    <LogOut size={16} />
+                    <LogOut size={15} />
                     {loggingOut ? "Logging out…" : "Log out"}
                   </button>
                 </div>
@@ -521,23 +586,23 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Toggle */}
           <button
             onClick={() => setMobileNavOpen((open) => !open)}
             type="button"
-            className="md:hidden p-2 rounded-xl text-stone-600 hover:bg-stone-100 transition-colors focus:outline-none cursor-pointer"
+            className="md:hidden p-2 rounded-xl text-stone-600 hover:bg-stone-100 transition-colors cursor-pointer"
             aria-label="Toggle navigation menu"
           >
-            {mobileNavOpen ? <X size={22} /> : <Menu size={22} />}
+            {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Navigation Drawer */}
+      {/* Mobile Drawer */}
       {mobileNavOpen && (
         <div className="md:hidden border-t border-stone-200/80 bg-white px-4 pt-3 pb-6 space-y-2 shadow-lg">
           <div className="space-y-1">
-            {navLinks.map(({ to, label, icon: Icon, badge }) => {
+            {allNavLinks.map(({ to, label, icon: Icon, badge }) => {
               const active =
                 location.pathname === to ||
                 (to === "/albums" && location.pathname.startsWith("/albums"));
@@ -546,15 +611,15 @@ export default function Navbar() {
                   key={to}
                   onClick={() => navigate(to)}
                   type="button"
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
                     active
-                      ? "bg-brand-50 text-brand-700"
+                      ? "bg-brand-50 text-brand-700 font-bold"
                       : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <Icon
-                      className={`w-5 h-5 ${
+                      className={`w-4 h-4 ${
                         active ? "text-brand-600" : "text-stone-400"
                       }`}
                     />
@@ -570,48 +635,34 @@ export default function Navbar() {
             })}
           </div>
 
-          <div className="border-t border-stone-100 pt-3">
+          <div className="border-t border-stone-100 pt-3 space-y-1">
             <button
-              onClick={() => navigate("/notifications")}
+              onClick={() => {
+                setMobileNavOpen(false);
+                setSearchOpen(true);
+              }}
               type="button"
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-stone-600 hover:bg-stone-50 rounded-xl cursor-pointer"
+              className="w-full flex items-center gap-3 px-3.5 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 rounded-xl cursor-pointer"
             >
-              <Bell className="w-5 h-5 text-stone-400" />
-              <span>All Notifications</span>
+              <Search className="w-4 h-4 text-stone-400" />
+              <span>Search Workspace</span>
             </button>
-
-            <button
-              onClick={() => navigate("/profile/edit")}
-              type="button"
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-stone-600 hover:bg-stone-50 rounded-xl cursor-pointer"
-            >
-              <UserCog className="w-5 h-5 text-stone-400" />
-              <span>Edit Profile</span>
-            </button>
-
-            {isOwnerOrAdmin && (
-              <button
-                onClick={() => navigate("/families/settings")}
-                type="button"
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-stone-600 hover:bg-stone-50 rounded-xl cursor-pointer"
-              >
-                <SlidersHorizontal className="w-5 h-5 text-stone-400" />
-                <span>Family Settings</span>
-              </button>
-            )}
 
             <button
               onClick={handleLogout}
               disabled={loggingOut}
               type="button"
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-60 cursor-pointer"
+              className="w-full flex items-center gap-3 px-3.5 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-60 cursor-pointer"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
               <span>{loggingOut ? "Logging out…" : "Log out"}</span>
             </button>
           </div>
         </div>
       )}
+
+      {/* Global Search Command Modal */}
+      <SearchModal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   );
 }
