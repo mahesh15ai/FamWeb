@@ -17,6 +17,7 @@ import {
   Trash2,
   Calendar,
   MessageSquare,
+  MessagesSquare,
   UserPlus,
   Sparkles,
   Search,
@@ -209,6 +210,8 @@ export default function Navbar() {
 
   const getNotificationIcon = (type) => {
     switch (type) {
+      case "new_message":
+        return <MessagesSquare size={14} className="text-emerald-600" />;
       case "new_post":
       case "new_comment":
         return <MessageSquare size={14} className="text-brand-600" />;
@@ -236,10 +239,11 @@ export default function Navbar() {
     }
   }
 
-  // Primary links shown directly on Navbar
+  // Primary links shown directly on Navbar (Dashboard, Feed, Lounge/Chat, Albums, Events)
   const primaryLinks = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/posts", label: "Feed", icon: MessageSquare },
+    { to: "/chat", label: "Lounge", icon: MessagesSquare },
     { to: "/albums", label: "Albums", icon: Layers },
     { to: "/events", label: "Events", icon: Calendar },
   ];
@@ -464,7 +468,7 @@ export default function Navbar() {
                     {notifications.map((item) => (
                       <div
                         key={item.id}
-                        onClick={() => handleMarkAsRead(item.id, item.target_url)}
+                        onClick={() => handleMarkAsRead(item.id, item.target_url || "/chat")}
                         className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
                           item.is_read
                             ? "bg-white border-stone-100 hover:bg-stone-50"

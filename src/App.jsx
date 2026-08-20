@@ -20,7 +20,9 @@ import Posts from "./pages/Posts";
 import MyPosts from "./pages/MyPosts";
 import AlbumsPage from "./pages/AlbumsPage";
 import AlbumDetailPage from "./pages/AlbumDetailPage";
-import EventsPage from "./pages/EventsPage"; // Family Events & Calendar
+import EventsPage from "./pages/EventsPage";
+import NotificationsPage from "./pages/NotificationsPage"; // Day 16 Notifications
+import ChatPage from "./pages/ChatPage"; // Day 18 Chat & Lounge
 
 export default function App() {
   return (
@@ -34,11 +36,32 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
+          {/* Dashboard Route */}
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Day 18 Real-Time Chat & Lounge Route */}
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Day 16 Notifications Route */}
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <NotificationsPage />
               </ProtectedRoute>
             }
           />
@@ -147,6 +170,7 @@ export default function App() {
             }
           />
 
+          {/* Wildcard Fallback */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </AuthProvider>
