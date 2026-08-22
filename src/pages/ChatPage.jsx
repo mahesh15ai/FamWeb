@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Send,
-  Image as ImageIcon,
   MessageSquare,
   Users,
   User,
@@ -18,6 +17,7 @@ import {
   Mic,
   Wifi,
   WifiOff,
+  Reply,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
@@ -27,7 +27,24 @@ import {
   sendMessage,
   startDirectChat,
   getFamilyMembersForChat,
+  markRoomAsRead,
 } from "../api/chatService";
+
+function formatChatDate(timestamp) {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+  });
+}
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -39,10 +56,14 @@ export default function ChatPage() {
   const [text, setText] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null); // Quote reference
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
   const [wsConnected, setWsConnected] = useState(false);
+
+  const [typingUser, setTypingUser] = useState(null);
+  const typingTimeoutRef = useRef(null);
 
   const [newChatModalOpen, setNewChatModalOpen] = useState(false);
   const [familyMembers, setFamilyMembers] = useState([]);
@@ -50,6 +71,7 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const inputRef = useRef(null);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
 
@@ -92,6 +114,13 @@ export default function ChatPage() {
     if (!activeRoom) return;
 
     let isSubscribed = true;
+    setTypingUser(null);
+    setReplyingTo(null);
+
+    markRoomAsRead(activeRoom.id).catch(console.error);
+    setRooms((prev) =>
+      prev.map((r) => (r.id === activeRoom.id ? { ...r, unread_count: 0 } : r))
+    );
 
     getRoomMessages(activeRoom.id)
       .then((data) => {
@@ -106,9 +135,7 @@ export default function ChatPage() {
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const host = window.location.hostname;
-      const wsUrl = `${protocol}//${host}:8000/ws/chat/${activeRoom.id}/?token=${encodeURIComponent(
-        token
-      )}`;
+      const wsUrl = `${protocol}//${host}:8000/ws/chat/${activeRoom.id}/?token=${encodeURIComponent(token)}`;
 
       const socket = new WebSocket(wsUrl);
       wsRef.current = socket;
@@ -119,16 +146,30 @@ export default function ChatPage() {
 
       socket.onmessage = (event) => {
         try {
-          const newMsg = JSON.parse(event.data);
-          if (isSubscribed) {
+          const payload = JSON.parse(event.data);
+
+          if (payload.type === "typing") {
+            if (payload.user_id !== user?.id && payload.is_typing) {
+              setTypingUser(payload.user_name);
+              if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+              typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
+            } else if (payload.user_id !== user?.id && !payload.is_typing) {
+              setTypingUser(null);
+            }
+            return;
+          }
+
+          const newMsg = payload.message || payload;
+          if (isSubscribed && newMsg.id) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMsg.id)) return prev;
               return [...prev, newMsg];
             });
+            setTypingUser(null);
             fetchRooms(false);
           }
         } catch (err) {
-          console.error("Error parsing WebSocket message:", err);
+          console.error("Error parsing WebSocket payload:", err);
         }
       };
 
@@ -152,6 +193,7 @@ export default function ChatPage() {
     return () => {
       isSubscribed = false;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (wsRef.current) {
         wsRef.current.close(1000);
         wsRef.current = null;
@@ -161,7 +203,31 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, typingUser]);
+
+  const handleTyping = (e) => {
+    setText(e.target.value);
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "typing", is_typing: true }));
+
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "typing", is_typing: false }));
+        }
+      }, 2000);
+    }
+  };
+
+  const handleStartReply = (msg) => {
+    setReplyingTo({
+      id: msg.id,
+      sender_name: msg.sender?.name || "Member",
+      content: msg.content || "📷 Photo",
+    });
+    inputRef.current?.focus();
+  };
 
   const handleOpenNewChatModal = async () => {
     setNewChatModalOpen(true);
@@ -206,12 +272,19 @@ export default function ChatPage() {
     e.preventDefault();
     if ((!text.trim() && !imageFile) || sending || !activeRoom) return;
 
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "typing", is_typing: false }));
+    }
+
+    const currentReplyId = replyingTo?.id || null;
+
     if (imageFile) {
       setSending(true);
       try {
         const newMsg = await sendMessage(activeRoom.id, {
           content: text.trim(),
           image: imageFile,
+          reply_to_id: currentReplyId,
         });
         setMessages((prev) => {
           if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -219,6 +292,7 @@ export default function ChatPage() {
         });
         setText("");
         clearImage();
+        setReplyingTo(null);
         fetchRooms(false);
       } catch (err) {
         console.error("Failed to upload image message:", err);
@@ -229,17 +303,28 @@ export default function ChatPage() {
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ content: text.trim() }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: "chat_message",
+          content: text.trim(),
+          reply_to_id: currentReplyId,
+        })
+      );
       setText("");
+      setReplyingTo(null);
     } else {
       setSending(true);
       try {
-        const newMsg = await sendMessage(activeRoom.id, { content: text.trim() });
+        const newMsg = await sendMessage(activeRoom.id, {
+          content: text.trim(),
+          reply_to_id: currentReplyId,
+        });
         setMessages((prev) => {
           if (prev.some((m) => m.id === newMsg.id)) return prev;
           return [...prev, newMsg];
         });
         setText("");
+        setReplyingTo(null);
         fetchRooms(false);
       } catch (err) {
         console.error("Failed to send message via HTTP fallback:", err);
@@ -257,14 +342,12 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-[#eef2f5] flex flex-col font-sans antialiased">
-      {/* Top Navbar */}
       <Navbar />
 
-      {/* Main Chat Viewport */}
       <main className="flex-1 p-0 sm:p-4 md:p-5 flex justify-center items-center">
         <div className="w-full max-w-7xl h-[calc(100vh-4rem)] sm:h-[calc(100vh-6.5rem)] bg-white sm:rounded-2xl shadow-xl overflow-hidden flex relative border border-stone-200/80">
           
-          {/* Left Side: WhatsApp Chat List */}
+          {/* Left Sidebar */}
           <div
             className={`w-full md:w-96 lg:w-[410px] border-r border-[#e9edef] flex flex-col shrink-0 bg-white ${
               activeRoom ? "hidden md:flex" : "flex"
@@ -296,16 +379,13 @@ export default function ChatPage() {
                 >
                   <Plus size={20} />
                 </button>
-                <button
-                  type="button"
-                  className="p-2 hover:bg-[#e9edef] rounded-full transition-colors cursor-pointer"
-                >
+                <button type="button" className="p-2 hover:bg-[#e9edef] rounded-full transition-colors cursor-pointer">
                   <MoreVertical size={19} />
                 </button>
               </div>
             </div>
 
-            {/* Group vs Direct Toggle Bar */}
+            {/* Segment Toggle */}
             <div className="p-2 bg-[#f0f2f5] border-b border-[#e9edef]">
               <div className="flex bg-[#e9edef] p-0.5 rounded-xl">
                 <button
@@ -344,7 +424,7 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Search Box */}
+            {/* Search */}
             <div className="p-2.5 bg-white border-b border-[#f0f2f5]">
               <div className="relative flex items-center bg-[#f0f2f5] rounded-xl px-3 py-1.5">
                 <Search className="w-4 h-4 text-[#54656f] shrink-0" />
@@ -358,7 +438,7 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Conversation List */}
+            {/* Room List */}
             <div className="flex-1 overflow-y-auto divide-y divide-[#f0f2f5] bg-white [scrollbar-width:thin]">
               {loadingRooms ? (
                 <div className="flex items-center justify-center py-16 text-[#00a884]">
@@ -386,6 +466,8 @@ export default function ChatPage() {
               ) : (
                 filteredRooms.map((room) => {
                   const isSelected = activeRoom?.id === room.id;
+                  const unread = room.unread_count || 0;
+
                   return (
                     <button
                       key={room.id}
@@ -419,7 +501,11 @@ export default function ChatPage() {
                             {room.display_name}
                           </p>
                           {room.last_message && (
-                            <span className="text-[11px] text-[#8696a0] font-medium shrink-0 ml-1">
+                            <span
+                              className={`text-[11px] font-medium shrink-0 ml-1 ${
+                                unread > 0 ? "text-[#00a884] font-bold" : "text-[#8696a0]"
+                              }`}
+                            >
                               {new Date(room.last_message.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -427,11 +513,18 @@ export default function ChatPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-[#667781] truncate mt-0.5 font-normal">
-                          {room.last_message
-                            ? `${room.last_message.sender_name}: ${room.last_message.content}`
-                            : "Tap to send a message"}
-                        </p>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <p className="text-xs text-[#667781] truncate font-normal flex-1 pr-2">
+                            {room.last_message
+                              ? `${room.last_message.sender_name}: ${room.last_message.content}`
+                              : "Tap to send a message"}
+                          </p>
+                          {unread > 0 && (
+                            <span className="min-w-[20px] h-5 px-1.5 bg-[#00a884] text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0 shadow-2xs">
+                              {unread > 99 ? "99+" : unread}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </button>
                   );
@@ -440,7 +533,7 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Right Side: WhatsApp Main Message Viewport */}
+          {/* Right Message Viewport */}
           <div
             className={`flex-1 flex flex-col relative ${
               !activeRoom ? "hidden md:flex items-center justify-center bg-[#f0f2f5]" : "flex bg-[#efeae2]"
@@ -448,7 +541,7 @@ export default function ChatPage() {
           >
             {activeRoom ? (
               <>
-                {/* WhatsApp Active Top Bar */}
+                {/* Header with Live Status & Typing Indicator */}
                 <div className="px-4 py-2.5 bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between z-10">
                   <div className="flex items-center gap-3">
                     <button
@@ -479,26 +572,28 @@ export default function ChatPage() {
                       <h3 className="text-sm font-semibold text-[#111b21] truncate">
                         {activeRoom.display_name}
                       </h3>
-                      <p className="text-[11px] font-medium text-[#00a884] flex items-center gap-1.5">
-                        {wsConnected ? (
-                          <>
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#00a884] animate-pulse"></span>
-                            online (live)
-                          </>
-                        ) : (
-                          <span className="text-[#8696a0]">connecting...</span>
-                        )}
-                      </p>
+                      {typingUser ? (
+                        <p className="text-[11px] font-bold text-[#00a884] animate-pulse">
+                          {activeRoom.room_type === "group" ? `${typingUser} is typing...` : "typing..."}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] font-medium text-[#00a884] flex items-center gap-1.5">
+                          {wsConnected ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#00a884] animate-pulse"></span>
+                              online
+                            </>
+                          ) : (
+                            <span className="text-[#8696a0]">connecting...</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 text-[#54656f]">
                     <span title={wsConnected ? "WebSocket Connected" : "Connecting..."}>
-                      {wsConnected ? (
-                        <Wifi size={17} className="text-[#00a884]" />
-                      ) : (
-                        <WifiOff size={17} className="text-[#8696a0]" />
-                      )}
+                      {wsConnected ? <Wifi size={17} className="text-[#00a884]" /> : <WifiOff size={17} className="text-[#8696a0]" />}
                     </span>
                     <button type="button" className="p-2 hover:bg-[#e9edef] rounded-full transition-colors cursor-pointer">
                       <Search size={19} />
@@ -509,13 +604,12 @@ export default function ChatPage() {
                   </div>
                 </div>
 
-                {/* Message Chat Feed with Doodle Tint */}
+                {/* Messages Feed */}
                 <div
-                  className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2.5 [scrollbar-width:thin]"
+                  className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 [scrollbar-width:thin]"
                   style={{
                     backgroundColor: "#efeae2",
-                    backgroundImage:
-                      "radial-gradient(#00000009 1px, transparent 1px)",
+                    backgroundImage: "radial-gradient(#00000009 1px, transparent 1px)",
                     backgroundSize: "20px 20px",
                   }}
                 >
@@ -530,86 +624,157 @@ export default function ChatPage() {
                       </p>
                     </div>
                   ) : (
-                    messages.map((msg) => {
+                    messages.map((msg, index) => {
                       const isMe = msg.sender?.id === user?.id;
+                      const currentDate = formatChatDate(msg.created_at);
+                      const prevDate = index > 0 ? formatChatDate(messages[index - 1].created_at) : null;
+                      const showDateDivider = currentDate !== prevDate;
+
                       return (
-                        <div
-                          key={msg.id}
-                          className={`flex items-end gap-2 ${
-                            isMe ? "justify-end" : "justify-start"
-                          }`}
-                        >
-                          {!isMe && (
-                            <div className="w-7 h-7 rounded-full bg-[#dfe5e7] text-[#54656f] flex items-center justify-center font-bold text-[10px] shrink-0 border border-stone-300 shadow-2xs overflow-hidden">
-                              {msg.sender?.avatar ? (
-                                <img
-                                  src={msg.sender.avatar}
-                                  alt={msg.sender.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                msg.sender?.name?.[0]?.toUpperCase() || "U"
-                              )}
+                        <div key={msg.id || index} className="space-y-3">
+                          {showDateDivider && (
+                            <div className="flex justify-center my-3 select-none">
+                              <span className="bg-white/90 shadow-2xs border border-stone-200/60 text-[#54656f] text-[11px] font-semibold px-3 py-1 rounded-lg uppercase tracking-wide">
+                                {currentDate}
+                              </span>
                             </div>
                           )}
 
-                          {/* WhatsApp Message Bubble */}
-                          <div
-                            className={`max-w-xs sm:max-w-md rounded-2xl px-3.5 py-2 space-y-1 shadow-2xs ${
-                              isMe
-                                ? "bg-[#d9fdd3] text-[#111b21] rounded-tr-none border border-[#c1e9bb]"
-                                : "bg-white text-[#111b21] rounded-tl-none border border-[#e9edef]"
-                            }`}
-                          >
-                            {!isMe && activeRoom.room_type === "group" && (
-                              <p className="text-[11px] font-bold text-[#00a884]">
-                                {msg.sender?.name}
-                              </p>
+                          <div className={`group flex items-end gap-1.5 ${isMe ? "justify-end" : "justify-start"}`}>
+                            {!isMe && (
+                              <div className="w-7 h-7 rounded-full bg-[#dfe5e7] text-[#54656f] flex items-center justify-center font-bold text-[10px] shrink-0 border border-stone-300 shadow-2xs overflow-hidden mb-0.5">
+                                {msg.sender?.avatar ? (
+                                  <img src={msg.sender.avatar} alt={msg.sender.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  msg.sender?.name?.[0]?.toUpperCase() || "U"
+                                )}
+                              </div>
                             )}
 
-                            {msg.image_url && (
-                              <img
-                                src={msg.image_url}
-                                alt="Attachment"
-                                className="rounded-xl max-h-64 w-full object-cover shadow-2xs cursor-pointer hover:opacity-95 transition-opacity"
-                                onClick={() => window.open(msg.image_url, "_blank")}
-                              />
+                            {/* Reply Action button on hover (shown on left for sent messages) */}
+                            {isMe && (
+                              <button
+                                type="button"
+                                onClick={() => handleStartReply(msg)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-[#54656f] hover:text-[#111b21] hover:bg-black/5 rounded-full cursor-pointer shrink-0"
+                                title="Reply"
+                              >
+                                <Reply size={15} />
+                              </button>
                             )}
 
-                            {msg.content && (
-                              <p className="text-xs sm:text-[13px] font-normal leading-relaxed whitespace-pre-wrap text-[#111b21]">
-                                {msg.content}
-                              </p>
-                            )}
-
-                            <div className="flex items-center justify-end gap-1 mt-0.5 select-none">
-                              <span className="text-[10px] text-[#667781] font-medium">
-                                {new Date(msg.created_at).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                              {isMe && (
-                                <CheckCheck size={14} className="text-[#53bdeb] inline ml-0.5" />
+                            {/* Main Message Bubble */}
+                            <div
+                              className={`max-w-xs sm:max-w-md rounded-2xl px-3.5 py-2 space-y-1.5 shadow-2xs relative ${
+                                isMe
+                                  ? "bg-[#d9fdd3] text-[#111b21] rounded-tr-none border border-[#c1e9bb]"
+                                  : "bg-white text-[#111b21] rounded-tl-none border border-[#e9edef]"
+                              }`}
+                            >
+                              {!isMe && activeRoom.room_type === "group" && (
+                                <p className="text-[11px] font-bold text-[#00a884]">{msg.sender?.name}</p>
                               )}
+
+                              {/* Embedded Reply / Quoted Box */}
+                              {msg.reply_to && (
+                                <div className="bg-black/5 border-l-4 border-[#00a884] rounded-lg px-2.5 py-1.5 text-left text-xs mb-1">
+                                  <p className="font-bold text-[11px] text-[#00a884] truncate">
+                                    {msg.reply_to.sender_name}
+                                  </p>
+                                  <p className="text-[11px] text-[#54656f] truncate mt-0.5 font-normal">
+                                    {msg.reply_to.content}
+                                  </p>
+                                </div>
+                              )}
+
+                              {msg.image_url && (
+                                <img
+                                  src={msg.image_url}
+                                  alt="Attachment"
+                                  className="rounded-xl max-h-64 w-full object-cover shadow-2xs cursor-pointer hover:opacity-95 transition-opacity"
+                                  onClick={() => window.open(msg.image_url, "_blank")}
+                                />
+                              )}
+
+                              {msg.content && (
+                                <p className="text-xs sm:text-[13px] font-normal leading-relaxed whitespace-pre-wrap text-[#111b21]">
+                                  {msg.content}
+                                </p>
+                              )}
+
+                              <div className="flex items-center justify-end gap-1 mt-0.5 select-none">
+                                <span className="text-[10px] text-[#667781] font-medium">
+                                  {new Date(msg.created_at).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                                {isMe && (
+                                  <CheckCheck
+                                    size={14}
+                                    className={`inline ml-0.5 ${msg.is_read ? "text-[#53bdeb]" : "text-[#8696a0]"}`}
+                                  />
+                                )}
+                              </div>
                             </div>
+
+                            {/* Reply Action button on hover (shown on right for incoming messages) */}
+                            {!isMe && (
+                              <button
+                                type="button"
+                                onClick={() => handleStartReply(msg)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-[#54656f] hover:text-[#111b21] hover:bg-black/5 rounded-full cursor-pointer shrink-0"
+                                title="Reply"
+                              >
+                                <Reply size={15} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
                     })
                   )}
+
+                  {/* Typing Indicator Bubble */}
+                  {typingUser && (
+                    <div className="flex items-center gap-2 text-stone-500 animate-in fade-in">
+                      <div className="bg-white border border-[#e9edef] rounded-2xl rounded-tl-none px-4 py-2.5 shadow-2xs flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#00a884] animate-bounce [animation-delay:-0.3s]"></span>
+                        <span className="w-2 h-2 rounded-full bg-[#00a884] animate-bounce [animation-delay:-0.15s]"></span>
+                        <span className="w-2 h-2 rounded-full bg-[#00a884] animate-bounce"></span>
+                      </div>
+                    </div>
+                  )}
+
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Image Preview Thumbnail */}
+                {/* Quoted Message Preview Bar */}
+                {replyingTo && (
+                  <div className="px-4 py-2 bg-[#f0f2f5] border-t border-[#e9edef] flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <div className="border-l-4 border-[#00a884] pl-3 py-0.5 min-w-0 flex-1 bg-white/60 rounded-r-lg p-1.5">
+                      <p className="text-xs font-bold text-[#00a884] truncate">
+                        Replying to {replyingTo.sender_name}
+                      </p>
+                      <p className="text-[11px] text-[#54656f] truncate mt-0.5">
+                        {replyingTo.content}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      className="p-1 text-[#8696a0] hover:text-[#111b21] hover:bg-[#e9edef] rounded-full cursor-pointer"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Attached Image Preview */}
                 {imagePreview && (
                   <div className="px-4 py-2 bg-[#f0f2f5] flex items-center gap-3 border-t border-[#e9edef]">
                     <div className="relative">
-                      <img
-                        src={imagePreview}
-                        alt="Selected"
-                        className="w-14 h-14 rounded-xl object-cover border border-[#d1d7db] shadow-xs"
-                      />
+                      <img src={imagePreview} alt="Selected" className="w-14 h-14 rounded-xl object-cover border border-[#d1d7db] shadow-xs" />
                       <button
                         onClick={clearImage}
                         type="button"
@@ -622,26 +787,13 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                {/* WhatsApp Bottom Input Bar */}
-                <form
-                  onSubmit={handleSend}
-                  className="p-2.5 bg-[#f0f2f5] border-t border-[#e9edef] flex items-center gap-2"
-                >
-                  <button
-                    type="button"
-                    className="p-2 text-[#54656f] hover:text-[#111b21] hover:bg-[#e9edef] rounded-full transition-colors cursor-pointer"
-                    title="Emoji"
-                  >
+                {/* Input Bar */}
+                <form onSubmit={handleSend} className="p-2.5 bg-[#f0f2f5] border-t border-[#e9edef] flex items-center gap-2">
+                  <button type="button" className="p-2 text-[#54656f] hover:text-[#111b21] hover:bg-[#e9edef] rounded-full transition-colors cursor-pointer" title="Emoji">
                     <Smile size={22} />
                   </button>
 
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageSelect}
-                    accept="image/*"
-                    className="hidden"
-                  />
+                  <input type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" className="hidden" />
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
@@ -652,10 +804,11 @@ export default function ChatPage() {
                   </button>
 
                   <input
+                    ref={inputRef}
                     type="text"
                     placeholder="Type a message"
                     value={text}
-                    onChange={(e) => setText(e.target.value)}
+                    onChange={handleTyping}
                     className="flex-1 bg-white border border-[#e9edef] rounded-xl px-4 py-2.5 text-xs sm:text-sm font-normal text-[#111b21] placeholder-[#8696a0] focus:outline-hidden focus:ring-1 focus:ring-[#00a884]"
                   />
 
@@ -668,10 +821,7 @@ export default function ChatPage() {
                       {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send size={18} />}
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      className="p-2.5 text-[#54656f] hover:bg-[#e9edef] rounded-full transition-colors cursor-pointer shrink-0"
-                    >
+                    <button type="button" className="p-2.5 text-[#54656f] hover:bg-[#e9edef] rounded-full transition-colors cursor-pointer shrink-0">
                       <Mic size={20} />
                     </button>
                   )}
@@ -690,7 +840,7 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* Modal: WhatsApp Contact Selector */}
+          {/* New Chat Modal */}
           {newChatModalOpen && (
             <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
               <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl border border-stone-200 space-y-4">
@@ -740,9 +890,7 @@ export default function ChatPage() {
                           <p className="text-xs font-bold text-[#111b21] group-hover:text-[#00a884] truncate transition-colors">
                             {member.name}
                           </p>
-                          <p className="text-[11px] text-[#8696a0] truncate">
-                            {member.email}
-                          </p>
+                          <p className="text-[11px] text-[#8696a0] truncate">{member.email}</p>
                         </div>
                       </button>
                     ))

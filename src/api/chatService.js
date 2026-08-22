@@ -15,10 +15,11 @@ export const getRoomMessages = async (roomId) => {
   return response.data;
 };
 
-export const sendMessage = async (roomId, { content, image }) => {
+export const sendMessage = async (roomId, { content, image, reply_to_id }) => {
   const formData = new FormData();
   if (content) formData.append("content", content);
   if (image) formData.append("image", image);
+  if (reply_to_id) formData.append("reply_to_id", reply_to_id);
 
   const response = await apiClient.post(`/chat/rooms/${roomId}/messages/`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
@@ -28,5 +29,10 @@ export const sendMessage = async (roomId, { content, image }) => {
 
 export const getFamilyMembersForChat = async () => {
   const response = await apiClient.get("/chat/family-members/");
+  return response.data;
+};
+
+export const markRoomAsRead = async (roomId) => {
+  const response = await apiClient.post(`/chat/rooms/${roomId}/mark-read/`);
   return response.data;
 };
